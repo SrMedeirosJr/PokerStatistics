@@ -331,3 +331,40 @@ Atualização automática: qualquer mudança de seletor ou mão dispara `/api/lo
 ## 10. Decisões
 
 _(O Claude registra aqui decisões tomadas durante a implementação.)_
+
+### Fase 0 — Setup
+
+- **Python 3.12 no venv.** O `eval7` (0.1.11) só publica wheel até o CPython 3.12 e a máquina não tem compilador C. O `pyproject.toml` instala `eval7` em Python < 3.13 e `phevaluator` em 3.13+; `app/equity/evaluator.py` esconde a diferença. Os testes das fases 0–2 foram rodados nas duas combinações (3.12 + eval7 e 3.13 + phevaluator).
+- **`httpx2` no lugar de `httpx`** nas dependências de dev: é o que o `TestClient` do Starlette 1.x usa (com `httpx` ele emite aviso de depreciação).
+- **Frontend montado à mão** (sem `npm create vite`, que hoje faz perguntas interativas), com as versões atuais: Vite 8, React 19, TypeScript 7, Tailwind 4.3. Sem ESLint, que não estava no plano; o `tsc` roda em modo estrito.
+- **Repositório Git próprio** dentro de `PokerStatistics/`, com `origin` em `github.com/SrMedeirosJr/PokerStatistics`, um commit por fase direto na `main`. `.gitattributes` força fim de linha LF.
+
+### Fase 1 — Core
+
+- A entrada de mãos também aceita `10` no lugar de `T` e símbolos de naipe (`K♥9♦`). Par com sufixo (`99s`, `99o`) é rejeitado.
+- No parser de ranges, `AK` sem sufixo vale `AKs` + `AKo`. A serialização devolve a forma canônica mais compacta (`AA,KK` vira `KK+`; `T9s-65s` vira a lista das cinco mãos).
+- **Extensão: peso por trecho** com `:` (ex.: `K9o:0.4`), para representar ranges com frequência mista. É o que permite mandar um range de push misto para `/api/equity`.
+- O BB não tem cenário `open` (se todos foldam até ele, a mão acabou).
+
+### Fase 2 — Equity
+
+- Todo erro da API responde `{"detail": "<mensagem em português>"}` (string), inclusive os erros de validação do Pydantic, que são traduzidos em `app/api/errors.py`.
+- Quando `hero` é uma classe, cada simulação sorteia um par (combo do herói, combo do adversário) sem carta repetida, com probabilidade proporcional ao peso do combo do adversário.
+- `iterations` é limitado a 100–200.000 e o request aceita `seed` opcional (usado nos testes).
+
+### Fase 3 — Matriz de equity e solver
+
+- **Matriz por boards compartilhados.** Em vez de 20.000 simulações independentes por par de classes, cada board sorteado é avaliado uma vez para todos os combos vivos e todos os pares compatíveis são comparados nele. A matriz versionada usa 100.000 boards (seed 20261008), o que dá centenas de milhares de confrontos por par, bem acima do alvo de 20.000. Leva cerca de 8 minutos em 4 processos nesta máquina.
+- **Contagem por ordenação.** Comparar 1326 × 1326 combos por board ficou lento (~70 ms/board). `BoardSimulator` ordena os combos por força, tira as contagens por classe de somas cumulativas e desconta só os pares que repetem carta (~10 ms/board). Um teste compara o resultado com a comparação direta.
+- **Solver por subjogo.** No modelo v1 cada posição de push forma um jogo independente (o pusher contra quem ainda vai agir), então cada um é resolvido separadamente. No empate de EV a melhor resposta é fold.
+- **Rodadas de aquecimento.** Antes da rodada final (tolerância 1e-4) o fictitious play roda 2 rodadas com tolerância 1e-3, cada uma partindo da anterior. Sem isso as primeiras iterações, longe do equilíbrio, deixam um resíduo pequeno na média de muitas mãos: em 8-max 10bb, 1.238 classes ficavam com frequência estritamente entre 0 e 1, contra 55 com o aquecimento.
+- **Máximo de 20.000 iterações**, e não 2.000: com passo `1/t`, uma mão mista só deixa a variação abaixo de 1e-4 depois de 5.000 a 10.000 iterações.
+- **Exploitability por spot.** Como "variação < 1e-4" é um critério fraco para fictitious play, cada spot também guarda o maior ganho que um jogador teria desviando sozinho. Nos 1.560 spots gerados o máximo foi 0,00014 bb (9-max 5bb, UTG1).
+- **Formato do JSON.** Frequências com 3 casas; resíduo abaixo de 0,5% vira ação pura. Cada spot ganhou um campo `solver` (`iterations`, `converged`, `exploitability_bb`). O arquivo é escrito com um spot por linha.
+- `generate` e `equity_matrix` aceitam `--workers` (padrão: todos os núcleos).
+- **Limitação do modelo abaixo de 5bb.** Com 3bb e 4bb o modelo "só o primeiro call conta" satura: quem paga primeiro fica heads-up e os blinds dos outros viram dinheiro morto, então all-in e call ficam baratos demais. Em 9-max o UTG abre 35,3% com 5bb, 74,4% com 4bb e 95,5% com 3bb, e o BB paga 100% contra o UTG com 4bb. Não é falha de convergência: partindo da solução do stack vizinho o solver chega ao mesmo equilíbrio. Efeito sobre os critérios de aceite:
+  - "Posições mais cedo têm range de push menor": vale em todos os stacks de 5bb para cima (e `UTG < CO < BTN < SB` é estrito). Com 3bb, em mesas de 6 a 9 jogadores, o BTN abre menos que o CO (9-max: 92,5% contra 95,5%).
+  - "BB paga mais largo contra o SB que contra o UTG": vale em todos os stacks de 5bb para cima. Com 3bb os dois são 100%; com 4bb, em mesas de 7 a 9 jogadores, o BB paga um pouco mais contra a primeira posição (9-max: 100% contra 99,1%).
+  - AA/KK sempre all-in/call, monotonia no stack e convergência valem nos 1.560 spots.
+
+  Os testes cobrem esses dois critérios integralmente de 5bb para cima e, abaixo disso, garantem que uma inversão só acontece com os ranges já saturados (push acima de 85%, call acima de 95%). Resolver de verdade exige pots multiway no solver, que está em "Futuro".
