@@ -67,6 +67,7 @@ def _range_fields(spot: SpotRange) -> dict[str, object]:
         "source": spot.source,
         "custom_id": spot.custom_id,
         "name": spot.name,
+        "sizes": spot.sizes,
     }
 
 

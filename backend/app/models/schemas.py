@@ -37,8 +37,10 @@ class CustomSpotInfo(BaseModel):
 
 class TableInfo(BaseModel):
     players: int
-    # Stacks com ranges do solver e/ou personalizados.
+    # Stacks com ranges do solver, de referência e/ou personalizados.
     stacks: list[float]
+    # Os que vêm das tabelas de referência (heurística de stack fundo).
+    reference_stacks: list[float] = Field(default_factory=list)
     positions: list[str]
     # Cenários válidos por posição: "open" e/ou "vs_{POS}".
     scenarios: dict[str, list[str]]
@@ -60,10 +62,13 @@ class RangeResponse(BaseModel):
     range_pct: float
     combos: float
     range: dict[str, dict[str, float]]
-    # "solver" (gerado) ou "custom" (salvo pelo usuário, com id e nome).
+    # "solver" (push/fold calculado), "reference" (heurística de stack fundo) ou
+    # "custom" (salvo pelo usuário, com id e nome).
     source: str = "solver"
     custom_id: int | None = None
     name: str | None = None
+    # Tamanho sugerido de cada aposta, em bb (só nas tabelas de referência).
+    sizes: dict[str, float] = Field(default_factory=dict)
 
 
 class LookupResponse(RangeResponse):

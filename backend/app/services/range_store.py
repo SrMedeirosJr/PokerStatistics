@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.config import RANGES_DIR
+from app.config import RANGES_DIR, REFERENCE_DIR
 from app.core.cards import COMBO_COUNT, TOTAL_COMBOS
 from app.core.positions import normalize_position, normalize_scenario, spot_key
 
@@ -20,6 +20,7 @@ MIXED = "mixed"
 FOLD = "fold"
 
 SOLVER = "solver"
+REFERENCE = "reference"
 CUSTOM = "custom"
 
 
@@ -38,10 +39,13 @@ class SpotRange:
     actions: Actions
     range_pct: float
     combos: float
-    # "solver" para os ranges gerados; "custom" para os que o usuário salvou.
+    # "solver" (push/fold calculado), "reference" (heurística de stack fundo) ou
+    # "custom" (salvo pelo usuário).
     source: str = SOLVER
     custom_id: int | None = None
     name: str | None = None
+    # Tamanho sugerido de cada aposta, em bb (só nas tabelas de referência).
+    sizes: Mapping[str, float] = field(default_factory=dict)
 
 
 def recommend(frequencies: Mapping[str, float]) -> str:
@@ -73,29 +77,43 @@ def unavailable(players: int) -> RangesUnavailableError:
 class RangeStore:
     def __init__(self, documents: Iterable[Mapping[str, Any]] = ()) -> None:
         self._tables: dict[int, dict[float, Mapping[str, Any]]] = {}
-        self._formats: dict[int, str] = {}
+        self._metas: dict[tuple[int, float], Mapping[str, Any]] = {}
         for document in documents:
             self.add(document)
 
     @classmethod
-    def from_directory(cls, directory: Path = RANGES_DIR) -> RangeStore:
+    def from_directory(cls, *directories: Path) -> RangeStore:
+        """Carrega todos os JSONs das pastas dadas (por padrão, solver + referência)."""
         return cls(
             json.loads(path.read_text(encoding="utf-8"))
+            for directory in directories or (RANGES_DIR, REFERENCE_DIR)
             for path in sorted(directory.glob("*.json"))
         )
 
     def add(self, document: Mapping[str, Any]) -> None:
         meta = document["meta"]
-        players = int(meta["players"])
-        self._tables.setdefault(players, {})[float(meta["stack_bb"])] = document["spots"]
-        self._formats[players] = str(meta["format"])
+        players, stack = int(meta["players"]), float(meta["stack_bb"])
+        self._tables.setdefault(players, {})[stack] = document["spots"]
+        self._metas[(players, stack)] = meta
 
     def players(self) -> list[int]:
         return sorted(self._tables)
 
+    def source(self, players: int, stack: float) -> str:
+        """'reference' para as tabelas heurísticas de stack fundo; 'solver' para o resto."""
+        model = str(self._metas[(players, stack)].get("model", ""))
+        return REFERENCE if model.startswith(REFERENCE) else SOLVER
+
     def available_stacks(self, players: int) -> list[float]:
         """Stacks com ranges gerados para a mesa (lista vazia se não houver nenhum)."""
         return sorted(self._tables.get(players, ()))
+
+    def reference_stacks(self, players: int) -> list[float]:
+        return [
+            stack
+            for stack in self.available_stacks(players)
+            if self.source(players, stack) == REFERENCE
+        ]
 
     def stacks(self, players: int) -> list[float]:
         stacks = self.available_stacks(players)
@@ -111,10 +129,12 @@ class RangeStore:
     ) -> SpotRange:
         """Range gerado para um stack que existe; posição e cenário já normalizados."""
         key = spot_key(position, scenario)
-        actions: Actions = self._tables[players][stack_used][key]["actions"]
+        spot = self._tables[players][stack_used][key]
+        actions: Actions = spot["actions"]
         combos = played_combos(actions)
+        prefix = self._metas[(players, stack_used)]["format"]
         return SpotRange(
-            spot_id=f"{self._formats[players]}_{players}max_{stack_used:g}bb_{key}",
+            spot_id=f"{prefix}_{players}max_{stack_used:g}bb_{key}",
             players=players,
             position=position,
             scenario=scenario,
@@ -123,6 +143,8 @@ class RangeStore:
             actions=actions,
             range_pct=round(100 * combos / TOTAL_COMBOS, 1),
             combos=round(combos, 1),
+            source=self.source(players, stack_used),
+            sizes=spot.get("sizes", {}),
         )
 
     def spot(self, players: int, stack: float, position: str, scenario: str) -> SpotRange:

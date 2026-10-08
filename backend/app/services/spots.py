@@ -86,6 +86,7 @@ def table_summaries(store: RangeStore, customs: CustomRangeService) -> list[dict
             {
                 "players": players,
                 "stacks": sorted(stacks),
+                "reference_stacks": store.reference_stacks(players),
                 "positions": list(positions),
                 "scenarios": {
                     position: list(scenarios_for(players, position)) for position in positions

@@ -159,48 +159,64 @@ def test_saving_the_same_spot_replaces_the_range(client: TestClient) -> None:
 
 
 def test_custom_spots_show_up_in_the_selectors(client: TestClient) -> None:
-    saved = save(client).json()
+    saved = save(client, stack_bb=30, name="Open CO 30bb").json()
 
     tables = {table["players"]: table for table in client.get("/api/spots").json()["tables"]}
 
-    assert tables[8]["stacks"] == [3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 40]
+    assert tables[8]["stacks"] == [3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 40, 60, 100]
+    assert tables[8]["reference_stacks"] == [25, 40, 60, 100]
     assert tables[8]["custom_spots"] == [
         {
             "id": saved["id"],
-            "name": "Open CO 40bb",
-            "stack": 40,
+            "name": "Open CO 30bb",
+            "stack": 30,
             "position": "CO",
             "scenario": "open",
         }
     ]
-    assert tables[6]["stacks"] == [3, 4, 5, 6, 7, 8, 10, 12, 15, 20]
+    assert tables[6]["stacks"] == [3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 40, 60, 100]
     assert tables[6]["custom_spots"] == []
 
 
 @pytest.mark.parametrize(
     ("overrides", "source", "used"),
     [
-        ({"stack": 40}, "custom", 40),
-        ({"stack": 35}, "custom", 40),
-        ({"stack": 100}, "custom", 40),
-        # Empate entre 20 (solver) e 40 (personalizado): vale o menor.
-        ({"stack": 30}, "solver", 20),
+        # Com um range personalizado de 30bb, os vizinhos são 25 e 40 (referência).
+        ({"stack": 30}, "custom", 30),
+        ({"stack": 28}, "custom", 30),
+        ({"stack": 34}, "custom", 30),
+        # Empates (27,5 e 35): vale o menor.
+        ({"stack": 27.5}, "reference", 25),
+        ({"stack": 35}, "custom", 30),
+        ({"stack": 36}, "reference", 40),
         ({"stack": 12}, "solver", 12),
-        # O range personalizado é só do CO em open; outros spots seguem no solver.
-        ({"stack": 40, "position": "BTN"}, "solver", 20),
-        ({"stack": 40, "scenario": "vs_UTG"}, "solver", 20),
-        ({"stack": 40, "players": 9}, "solver", 20),
+        # O range personalizado é só do CO em open; outros spots não têm 30bb.
+        ({"stack": 30, "position": "BTN"}, "reference", 25),
+        ({"stack": 30, "scenario": "vs_UTG"}, "reference", 25),
+        ({"stack": 30, "players": 9}, "reference", 25),
     ],
 )
 def test_nearest_stack_considers_custom_ranges_of_the_same_spot(
     client: TestClient, overrides: dict[str, Any], source: str, used: float
 ) -> None:
-    save(client)
+    save(client, stack_bb=30, name="Open CO 30bb")
 
     body = lookup(client, **overrides).json()
 
     assert (body["source"], body["stack_used"]) == (source, used)
     assert body["custom_id"] is None or source == "custom"
+
+
+def test_custom_range_overrides_the_reference_table_at_the_same_stack(client: TestClient) -> None:
+    before = lookup(client, "AKs").json()
+    assert (before["source"], before["recommendation"]) == ("reference", "raise")
+    assert before["sizes"] == {"raise": 2.2}
+
+    save(client, actions={"AKs": {"allin": 1.0}})
+
+    after = lookup(client, "AKs").json()
+    assert (after["source"], after["recommendation"]) == ("custom", "allin")
+    assert after["sizes"] == {}
 
 
 def test_custom_range_overrides_the_solver_at_the_same_stack(client: TestClient) -> None:

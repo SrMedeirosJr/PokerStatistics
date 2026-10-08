@@ -8,6 +8,8 @@ from pathlib import Path
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 EQUITY_MATRIX_PATH = DATA_DIR / "equity_matrix.npz"
 RANGES_DIR = DATA_DIR / "ranges"
+# Tabelas de referência para stack fundo (heurística, não vêm do solver).
+REFERENCE_DIR = DATA_DIR / "reference"
 
 # Ranges personalizados do usuário (não versionado). Outro banco: POKER_DATABASE_URL.
 CUSTOM_RANGES_DB = DATA_DIR / "custom_ranges.db"

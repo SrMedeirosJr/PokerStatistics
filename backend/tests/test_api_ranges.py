@@ -29,7 +29,8 @@ def test_spots_lists_tables_stacks_positions_and_scenarios(client: TestClient) -
     assert response.status_code == 200
     tables = {table["players"]: table for table in response.json()["tables"]}
     assert sorted(tables) == [2, 3, 4, 5, 6, 7, 8, 9]
-    assert tables[8]["stacks"] == [3, 4, 5, 6, 7, 8, 10, 12, 15, 20]
+    assert tables[8]["stacks"] == [3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 40, 60, 100]
+    assert tables[8]["reference_stacks"] == [25, 40, 60, 100]
     assert tables[8]["positions"] == ["UTG", "UTG1", "LJ", "HJ", "CO", "BTN", "SB", "BB"]
     assert tables[8]["scenarios"]["UTG"] == ["open"]
     assert tables[8]["scenarios"]["CO"] == ["open", "vs_UTG", "vs_UTG1", "vs_LJ", "vs_HJ"]
@@ -90,7 +91,7 @@ def test_position_and_scenario_are_case_insensitive(client: TestClient) -> None:
 
 @pytest.mark.parametrize(
     ("requested", "used"),
-    [(6, 6), (6.4, 6), (9, 8), (11, 10), (13, 12), (14, 15), (2, 3), (50, 20), (0.5, 3)],
+    [(6, 6), (6.4, 6), (9, 8), (11, 10), (13, 12), (14, 15), (2, 3), (22, 20), (0.5, 3)],
 )
 def test_stack_outside_the_list_uses_the_nearest(
     client: TestClient, requested: float, used: float
@@ -100,6 +101,26 @@ def test_stack_outside_the_list_uses_the_nearest(
     assert body["stack_requested"] == requested
     assert body["stack_used"] == used
     assert body["spot_id"] == f"mtt_8max_{used:g}bb_CO_open"
+    assert body["source"] == "solver"
+
+
+@pytest.mark.parametrize(
+    ("requested", "used"),
+    # 22,5 fica entre 20 (solver) e 25 (referência): no empate vale o menor.
+    [(22.5, 20), (23, 25), (25, 25), (32, 25), (33, 40), (50, 40), (51, 60), (80, 60), (500, 100)],
+)
+def test_deep_stacks_use_the_reference_tables(
+    client: TestClient, requested: float, used: float
+) -> None:
+    body = lookup(client, stack=requested).json()
+
+    assert body["stack_used"] == used
+    if used >= 25:
+        assert body["source"] == "reference"
+        assert body["spot_id"] == f"ref_8max_{used:g}bb_CO_open"
+        assert set(body["frequencies"]) <= {"raise", "fold"}
+    else:
+        assert body["source"] == "solver"
 
 
 def test_chips_and_big_blind_are_converted_to_stack(client: TestClient) -> None:
