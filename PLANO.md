@@ -334,7 +334,7 @@ _(O Claude registra aqui decisões tomadas durante a implementação.)_
 
 ### Fase 0 — Setup
 
-- **Python 3.12 no venv.** O `eval7` (0.1.11) só publica wheel até o CPython 3.12 e a máquina não tem compilador C. O `pyproject.toml` instala `eval7` em Python < 3.13 e `phevaluator` em 3.13+; `app/equity/evaluator.py` esconde a diferença. Os testes das fases 0–2 foram rodados nas duas combinações (3.12 + eval7 e 3.13 + phevaluator).
+- **Python 3.12 no venv.** O `eval7` (0.1.11) só publica wheel até o CPython 3.12 e a máquina não tem compilador C. O `pyproject.toml` instala `eval7` em Python < 3.13 e `phevaluator` em 3.13+; `app/equity/evaluator.py` esconde a diferença. A suíte completa do backend roda nas duas combinações (3.12 + eval7 e 3.13 + phevaluator); a matriz e os ranges versionados foram gerados com o eval7.
 - **`httpx2` no lugar de `httpx`** nas dependências de dev: é o que o `TestClient` do Starlette 1.x usa (com `httpx` ele emite aviso de depreciação).
 - **Frontend montado à mão** (sem `npm create vite`, que hoje faz perguntas interativas), com as versões atuais: Vite 8, React 19, TypeScript 7, Tailwind 4.3. Sem ESLint, que não estava no plano; o `tsc` roda em modo estrito.
 - **Repositório Git próprio** dentro de `PokerStatistics/`, com `origin` em `github.com/SrMedeirosJr/PokerStatistics`, um commit por fase direto na `main`. `.gitattributes` força fim de linha LF.
