@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from app.equity.engine import DEFAULT_ITERATIONS
@@ -25,12 +27,22 @@ class EquityResponse(BaseModel):
     equity: float
 
 
+class CustomSpotInfo(BaseModel):
+    id: int
+    name: str
+    stack: float
+    position: str
+    scenario: str
+
+
 class TableInfo(BaseModel):
     players: int
+    # Stacks com ranges do solver e/ou personalizados.
     stacks: list[float]
     positions: list[str]
     # Cenários válidos por posição: "open" e/ou "vs_{POS}".
     scenarios: dict[str, list[str]]
+    custom_spots: list[CustomSpotInfo] = Field(default_factory=list)
 
 
 class SpotsResponse(BaseModel):
@@ -48,9 +60,53 @@ class RangeResponse(BaseModel):
     range_pct: float
     combos: float
     range: dict[str, dict[str, float]]
+    # "solver" (gerado) ou "custom" (salvo pelo usuário, com id e nome).
+    source: str = "solver"
+    custom_id: int | None = None
+    name: str | None = None
 
 
 class LookupResponse(RangeResponse):
     hand: str
     recommendation: str
     frequencies: dict[str, float]
+
+
+class ParseRangeRequest(BaseModel):
+    text: str
+
+
+class ParseRangeResponse(BaseModel):
+    # Classe de mão -> peso (0..1).
+    hands: dict[str, float]
+    combos: float
+
+
+class CustomRangeIn(BaseModel):
+    name: str = ""
+    players: int
+    stack_bb: float
+    position: str
+    scenario: str
+    # Classe de mão -> {ação: frequência}. Mãos ausentes são fold.
+    actions: dict[str, dict[str, float]]
+
+
+class CustomRangeOut(CustomRangeIn):
+    id: int
+    spot_id: str
+    range_pct: float
+    combos: float
+    updated_at: datetime
+
+
+class CustomRangesDocument(BaseModel):
+    format: str
+    version: int
+    exported_at: datetime | None = None
+    ranges: list[CustomRangeIn]
+
+
+class ImportResult(BaseModel):
+    created: int
+    updated: int

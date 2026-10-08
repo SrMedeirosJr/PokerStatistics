@@ -1,20 +1,23 @@
 /** Rótulos, cores e formatação das ações (all-in / call / fold). */
 
 import type { ActionName, Frequencies, RangeMap } from '../types.ts'
+import { comboCount } from './hands.ts'
 
 export const ACTION_LABEL: Record<ActionName, string> = {
   allin: 'All-in',
+  raise: 'Raise',
   call: 'Call',
   fold: 'Fold',
 }
 
 export const ACTION_COLOR: Record<ActionName, string> = {
   allin: '#dc2626',
+  raise: '#2563eb',
   call: '#16a34a',
   fold: '#334155',
 }
 
-export const ACTION_ORDER: ActionName[] = ['allin', 'call', 'fold']
+export const ACTION_ORDER: ActionName[] = ['allin', 'raise', 'call', 'fold']
 
 /** Em 'open' o herói decide all-in ou fold; contra um all-in, call ou fold. */
 export function activeAction(scenario: string): 'allin' | 'call' {
@@ -25,7 +28,18 @@ export function scenarioLabel(scenario: string): string {
   return scenario === 'open' ? 'Open' : `vs ${scenario.slice('vs_'.length)}`
 }
 
-/** Ações com frequência maior que zero, na ordem all-in, call, fold. */
+/** Combos (de 1326) de cada ação num range, ponderados pela frequência. */
+export function combosByAction(range: RangeMap): Record<ActionName, number> {
+  const totals: Record<ActionName, number> = { allin: 0, raise: 0, call: 0, fold: 0 }
+  for (const [hand, frequencies] of Object.entries(range)) {
+    for (const [action, frequency] of presentActions(frequencies)) {
+      totals[action] += comboCount(hand) * frequency
+    }
+  }
+  return totals
+}
+
+/** Ações com frequência maior que zero, na ordem all-in, raise, call, fold. */
 export function presentActions(frequencies: Frequencies): [ActionName, number][] {
   return ACTION_ORDER.flatMap((action): [ActionName, number][] => {
     const frequency = frequencies[action] ?? 0

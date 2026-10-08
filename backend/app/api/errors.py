@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.core.errors import UserInputError
+from app.services.custom_ranges import CustomRangeNotFoundError
 from app.services.range_store import RangesUnavailableError
 
 _REQUEST_PARTS = {"query", "body", "path", "header", "cookie"}
@@ -65,5 +66,6 @@ def install_error_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=422, content={"detail": str(error)})
 
     @app.exception_handler(RangesUnavailableError)
-    async def handle_ranges_unavailable(_: Request, error: RangesUnavailableError) -> JSONResponse:
+    @app.exception_handler(CustomRangeNotFoundError)
+    async def handle_not_found(_: Request, error: LookupError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(error)})

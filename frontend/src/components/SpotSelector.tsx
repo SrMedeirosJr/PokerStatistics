@@ -4,6 +4,7 @@ import { formatNumber, scenarioLabel } from '../lib/actions.ts'
 import { chipsStack, type SpotAction, type SpotState } from '../lib/spotState.ts'
 import type { TableInfo } from '../types.ts'
 import { ChoiceGroup } from './ChoiceGroup.tsx'
+import { CustomBadge } from './CustomBadge.tsx'
 import { PositionHelper } from './PositionHelper.tsx'
 
 interface SpotSelectorProps {
@@ -18,9 +19,49 @@ const inputClass =
 /** Seletores do spot: jogadores, stack (em bb ou fichas), posição e situação. */
 export function SpotSelector({ state, table, dispatch }: SpotSelectorProps) {
   const converted = chipsStack(state)
+  const customStacks = new Set(table.custom_spots.map((spot) => spot.stack))
 
   return (
     <div className="space-y-4">
+      {table.custom_spots.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-xs font-medium tracking-wide text-slate-400 uppercase">
+            Seus ranges nesta mesa
+          </p>
+          <ul className="space-y-1.5">
+            {table.custom_spots.map((spot) => {
+              const active =
+                !state.chipsMode &&
+                spot.stack === state.stack &&
+                spot.position === state.position &&
+                spot.scenario === state.scenario
+              return (
+                <li key={spot.id}>
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() =>
+                      dispatch({ type: 'selectSpot', players: table.players, ...spot })
+                    }
+                    className={`flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-emerald-400 ${
+                      active
+                        ? 'bg-violet-500/25 text-slate-50 ring-1 ring-violet-400/60'
+                        : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                    }`}
+                  >
+                    <CustomBadge />
+                    <span className="font-medium">{spot.name}</span>
+                    <span className="text-xs text-slate-400">
+                      {spot.position} · {scenarioLabel(spot.scenario)} · {formatNumber(spot.stack)} bb
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
       <ChoiceGroup
         label="Jogadores na mesa"
         options={state.tables.map((item) => ({ value: item.players, label: String(item.players) }))}
@@ -31,7 +72,11 @@ export function SpotSelector({ state, table, dispatch }: SpotSelectorProps) {
       <div className="space-y-2">
         <ChoiceGroup
           label="Stack (big blinds)"
-          options={table.stacks.map((stack) => ({ value: stack, label: formatNumber(stack) }))}
+          options={table.stacks.map((stack) => ({
+            value: stack,
+            label: formatNumber(stack),
+            mark: customStacks.has(stack) ? 'tem range personalizado' : undefined,
+          }))}
           value={state.chipsMode ? null : state.stack}
           onChange={(stack) => dispatch({ type: 'setStack', stack })}
         />
@@ -100,8 +145,8 @@ export function SpotSelector({ state, table, dispatch }: SpotSelectorProps) {
       />
       <p className="text-xs text-slate-500">
         {state.scenario === 'open'
-          ? 'Open: todos antes de você foldaram. Você decide entre all-in e fold.'
-          : `${scenarioLabel(state.scenario)}: essa posição deu all-in e quem estava entre vocês foldou. Você decide entre call e fold.`}
+          ? 'Open: todos antes de você foldaram e você é o primeiro a entrar no pote.'
+          : `${scenarioLabel(state.scenario)}: essa posição deu all-in e quem estava entre vocês foldou.`}
       </p>
     </div>
   )

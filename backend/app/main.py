@@ -4,15 +4,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_equity, routes_ranges
+from app.api import routes_custom, routes_equity, routes_ranges
 from app.api.errors import install_error_handlers
+from app.config import database_url
+from app.db import make_engine
 from app.services.range_store import RangeStore
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.range_store = RangeStore.from_directory()
+    app.state.engine = make_engine(database_url())
     yield
+    app.state.engine.dispose()
 
 
 app = FastAPI(title="Poker Range Helper", version="0.1.0", lifespan=lifespan)
@@ -25,6 +29,7 @@ app.add_middleware(
 )
 install_error_handlers(app)
 app.include_router(routes_ranges.router)
+app.include_router(routes_custom.router)
 app.include_router(routes_equity.router)
 
 

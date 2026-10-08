@@ -20,7 +20,7 @@ function table(players: number, positions: string[]): TableInfo {
       return [position, position === 'BB' ? facing : ['open', ...facing]]
     }),
   )
-  return { players, stacks: STACKS, positions, scenarios }
+  return { players, stacks: STACKS, positions, scenarios, custom_spots: [] }
 }
 
 const TABLES = [
@@ -68,6 +68,25 @@ describe('spotReducer', () => {
 
   it('coloca o BB contra o SB, já que ele nunca abre o pote', () => {
     expect(run(loaded, { type: 'setPosition', position: 'BB' }).scenario).toBe('vs_SB')
+  })
+
+  it('seleciona um spot inteiro de uma vez', () => {
+    const tables = TABLES.map((item) =>
+      item.players === 6 ? { ...item, stacks: [...STACKS, 40] } : item,
+    )
+    const state = run(
+      { type: 'tablesLoaded', tables },
+      { type: 'setChipsMode', enabled: true },
+      { type: 'selectSpot', players: 6, stack: 40, position: 'BB', scenario: 'vs_CO' },
+    )
+
+    expect(state).toMatchObject({
+      players: 6,
+      stack: 40,
+      position: 'BB',
+      scenario: 'vs_CO',
+      chipsMode: false,
+    })
   })
 
   it('escolher um stack nos botões sai do modo fichas', () => {

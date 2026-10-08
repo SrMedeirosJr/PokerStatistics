@@ -394,3 +394,16 @@ _(O Claude registra aqui decisões tomadas durante a implementação.)_
 - Se a mão foi informada com naipes (`Ah9d`), a equity é calculada para essas cartas exatas; se foi uma classe (`A9o`), é a média dos combos.
 - Um erro no cálculo da equity aparece dentro do painel e não esconde a recomendação.
 - O `PositionHelper` fica recolhido por padrão e os assentos da mini-mesa são clicáveis (escolhem a posição).
+
+### Fase 7 — Ranges personalizados
+
+- **SQLAlchemy 2** (e não SQLModel), com SQLite em `backend/data/custom_ranges.db`. O arquivo fica fora do Git por ser dado do usuário; a variável `POKER_DATABASE_URL` aponta para outro banco. Os testes sempre usam um banco temporário.
+- **Um range por spot** (mesa, stack, posição, situação). `POST /api/custom-ranges` grava e, se já existir um range para o mesmo spot, substitui; não há `PUT`. `DELETE /api/custom-ranges/{id}` exclui.
+- **Como o lookup escolhe.** Para um spot concorrem os stacks gerados pelo solver e os dos ranges personalizados desse mesmo spot; vale o mais próximo do stack pedido e, no empate, o menor. Se houver os dois no stack escolhido, vale o personalizado. Exemplo com um open de CO em 40 bb salvo: pedir 35 bb usa o personalizado; pedir 30 bb (empate entre 20 e 40) usa a tabela de 20 bb do solver; BTN com 40 bb continua na tabela de 20 bb.
+- As respostas de `/api/ranges` e `/api/lookup` ganharam `source` (`solver` ou `custom`), `custom_id` e `name`. Em `/api/spots`, cada mesa ganhou `custom_spots` e os stacks personalizados entram em `stacks`.
+- Ações aceitas num range personalizado: `allin`, `raise`, `call` e `fold`, com frequências de 3 casas; o que faltar para 100% numa mão vira fold.
+- **Colar um range** usa `POST /api/ranges/parse`, que reaproveita o parser do backend (inclusive pesos), em vez de reescrever o parser no frontend.
+- **Exportar/importar:** `GET /api/custom-ranges/export` e `POST /api/custom-ranges/import`, no formato `poker-range-helper/custom-ranges` versão 1. A importação valida o arquivo inteiro antes de gravar e substitui os ranges de spots que já existem.
+- O editor fica numa aba "Meus ranges": escolhe-se a ação do pincel e pinta-se clicando ou arrastando. O selo "personalizado" aparece na lista de ranges salvos, no atalho "Seus ranges nesta mesa" dos seletores, no card da recomendação e na legenda; o botão do stack ganha um ponto roxo.
+- Em `vs_{POS}`, o painel de equity usa as mãos de all-in do range de `open` de quem empurrou. Se esse range for um personalizado sem nenhum all-in, o painel avisa em vez de calcular.
+- Os avisos de stack (abaixo de 5 bb, acima da maior tabela) só aparecem para ranges do solver.

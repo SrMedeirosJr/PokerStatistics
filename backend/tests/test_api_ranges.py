@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.routes_ranges import get_store
+from app.api.deps import get_store
 from app.core.cards import HAND_CLASSES
 from app.main import app
 from app.services.range_store import RangeStore, RangesUnavailableError, recommend

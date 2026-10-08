@@ -6,6 +6,8 @@ import type { SpotQuery } from '../types.ts'
 interface EquityPanelProps {
   query: SpotQuery | null
   hand: ParsedHand
+  /** Muda quando os ranges personalizados mudam, para recalcular. */
+  version?: number
 }
 
 const panel = 'rounded-xl border border-slate-800 bg-slate-900 p-4'
@@ -27,9 +29,13 @@ function heroHand(hand: ParsedHand): { request: string; display: string } | null
 }
 
 /** Equity da mão contra o range de all-in de quem empurrou; só aparece em 'vs_{POS}'. */
-export function EquityPanel({ query, hand }: EquityPanelProps) {
+export function EquityPanel({ query, hand, version = 0 }: EquityPanelProps) {
   const hero = heroHand(hand)
-  const { pusher, pusherRange, equity, loading, error } = useEquity(query, hero?.request ?? null)
+  const { pusher, pusherRange, equity, loading, error } = useEquity(
+    query,
+    hero?.request ?? null,
+    version,
+  )
 
   if (!pusher) return null
   const title = `Equity contra o all-in do ${pusher}`

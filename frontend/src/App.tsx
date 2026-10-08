@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useReducer, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 
 import { ActionResult } from './components/ActionResult.tsx'
 import { EquityPanel } from './components/EquityPanel.tsx'
 import { HandInput } from './components/HandInput.tsx'
 import { Legend } from './components/Legend.tsx'
+import { RangeEditor } from './components/RangeEditor.tsx'
 import { RangeGrid } from './components/RangeGrid.tsx'
 import { SpotSelector } from './components/SpotSelector.tsx'
 import { useSpotData } from './hooks/useSpotData.ts'
@@ -11,9 +12,10 @@ import { formatNumber } from './lib/actions.ts'
 import { getHealth, getSpots } from './lib/api.ts'
 import { parseHand } from './lib/hands.ts'
 import { buildQuery, currentTable, initialSpotState, spotReducer } from './lib/spotState.ts'
-import type { RangeResponse } from './types.ts'
+import type { CustomRange, RangeResponse } from './types.ts'
 
 type ApiStatus = 'checking' | 'online' | 'offline'
+type View = 'consult' | 'editor'
 
 const STATUS_LABEL: Record<ApiStatus, string> = {
   checking: 'Verificando API…',
@@ -27,23 +29,32 @@ const STATUS_DOT: Record<ApiStatus, string> = {
   offline: 'bg-red-500',
 }
 
+const VIEWS: { id: View; label: string }[] = [
+  { id: 'consult', label: 'Consultar' },
+  { id: 'editor', label: 'Meus ranges' },
+]
+
 /** Abaixo disso o modelo "só o primeiro call" satura (ver Decisões no PLANO.md). */
 const SATURATED_BELOW_BB = 5
 
 const panel = 'rounded-xl border border-slate-800 bg-slate-900 p-4'
+const warning = 'rounded-md border border-amber-500/40 bg-amber-950/40 p-3 text-sm text-amber-200'
 
-function StackWarning({ spot, maxStack }: { spot: RangeResponse; maxStack: number }) {
-  if (spot.stack_requested > maxStack * 1.25) {
+/** Avisos sobre os limites dos ranges gerados; não valem para ranges personalizados. */
+function StackWarning({ spot }: { spot: RangeResponse }) {
+  if (spot.source !== 'solver') return null
+  if (spot.stack_requested > spot.stack_used * 1.25) {
     return (
-      <p className="rounded-md border border-amber-500/40 bg-amber-950/40 p-3 text-sm text-amber-200">
+      <p className={warning}>
         Com {formatNumber(spot.stack_requested)} bb o jogo já não é só all-in ou fold. O que
-        aparece aqui é a tabela de {formatNumber(spot.stack_used)} bb, a maior disponível.
+        aparece aqui é a tabela de {formatNumber(spot.stack_used)} bb, a maior gerada. Para stacks
+        maiores, crie o seu range em "Meus ranges".
       </p>
     )
   }
   if (spot.stack_used < SATURATED_BELOW_BB) {
     return (
-      <p className="rounded-md border border-amber-500/40 bg-amber-950/40 p-3 text-sm text-amber-200">
+      <p className={warning}>
         Com menos de {SATURATED_BELOW_BB} bb a simplificação do modelo (só o primeiro call conta)
         pesa mais e os ranges saem bem largos. Use com cautela.
       </p>
@@ -54,10 +65,25 @@ function StackWarning({ spot, maxStack }: { spot: RangeResponse; maxStack: numbe
 
 export default function App() {
   const [state, dispatch] = useReducer(spotReducer, initialSpotState)
+  const [view, setView] = useState<View>('consult')
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking')
   const [spotsError, setSpotsError] = useState<string | null>(null)
   const [spotsLoaded, setSpotsLoaded] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  // Muda quando um range personalizado é salvo ou excluído, para refazer as consultas.
+  const [dataVersion, setDataVersion] = useState(0)
+
+  const loadSpots = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const spots = await getSpots(signal)
+      dispatch({ type: 'tablesLoaded', tables: spots.tables })
+      setSpotsError(null)
+      setSpotsLoaded(true)
+    } catch (error) {
+      if (signal?.aborted) return
+      setSpotsError(error instanceof Error ? error.message : 'Erro inesperado.')
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -67,30 +93,38 @@ export default function App() {
         if (!controller.signal.aborted) setApiStatus('offline')
       },
     )
-    getSpots(controller.signal).then(
-      (spots) => {
-        dispatch({ type: 'tablesLoaded', tables: spots.tables })
-        setSpotsError(null)
-        setSpotsLoaded(true)
-      },
-      (error: unknown) => {
-        if (controller.signal.aborted) return
-        setSpotsError(error instanceof Error ? error.message : 'Erro inesperado.')
-      },
-    )
+    void loadSpots(controller.signal)
     return () => controller.abort()
-  }, [attempt])
+  }, [attempt, loadSpots])
 
   const parsed = useMemo(() => parseHand(state.handText), [state.handText])
   const handClass = parsed.status === 'valid' ? parsed.handClass : null
   const table = currentTable(state)
   const query = buildQuery(state)
-  const { range, lookup, loading, error } = useSpotData(query, handClass)
+  const { range, lookup, loading, error } = useSpotData(query, handClass, dataVersion)
 
   function retry() {
     setApiStatus('checking')
     setSpotsError(null)
     setAttempt((count) => count + 1)
+  }
+
+  function customRangesChanged() {
+    setDataVersion((version) => version + 1)
+    void loadSpots()
+  }
+
+  async function consultCustomRange(custom: CustomRange) {
+    // Recarrega as mesas antes, para o stack do range já existir nos seletores.
+    await loadSpots()
+    dispatch({
+      type: 'selectSpot',
+      players: custom.players,
+      stack: custom.stack_bb,
+      position: custom.position,
+      scenario: custom.scenario,
+    })
+    setView('consult')
   }
 
   return (
@@ -132,47 +166,79 @@ export default function App() {
         )}
 
         {!spotsError && table && (
-          <div className="grid gap-4 lg:grid-cols-[23rem_minmax(0,1fr)] lg:items-start">
-            <div className="space-y-4">
-              <section className={panel} aria-label="Spot">
-                <SpotSelector state={state} table={table} dispatch={dispatch} />
-              </section>
-              <section className={panel} aria-label="Mão">
-                <HandInput
-                  value={state.handText}
-                  parsed={parsed}
-                  onChange={(handText) => dispatch({ type: 'setHand', handText })}
-                />
-              </section>
+          <>
+            <div role="tablist" aria-label="Modo" className="mb-4 flex gap-1 border-b border-slate-800">
+              {VIEWS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === item.id}
+                  onClick={() => setView(item.id)}
+                  className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-emerald-400 ${
+                    view === item.id
+                      ? 'border-emerald-400 text-slate-50'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
 
-            <div className="space-y-4">
-              <ActionResult
-                hand={parsed}
-                lookup={lookup}
-                range={range}
-                loading={loading}
-                error={error}
+            {view === 'editor' && (
+              <RangeEditor
+                tables={state.tables}
+                onChanged={customRangesChanged}
+                onConsult={(custom) => void consultCustomRange(custom)}
               />
-              {range && !error && <StackWarning spot={range} maxStack={Math.max(...table.stacks)} />}
-              <EquityPanel query={query} hand={parsed} />
-              <section className={`${panel} space-y-3`} aria-label="Range">
-                <RangeGrid
-                  range={error ? null : (range?.range ?? null)}
-                  selectedHand={handClass}
-                  onSelect={(hand) => dispatch({ type: 'setHand', handText: hand })}
-                  loading={loading}
-                />
-                <Legend range={error ? null : range} />
-              </section>
-            </div>
-          </div>
+            )}
+
+            {view === 'consult' && (
+              <div className="grid gap-4 lg:grid-cols-[23rem_minmax(0,1fr)] lg:items-start">
+                <div className="space-y-4">
+                  <section className={panel} aria-label="Spot">
+                    <SpotSelector state={state} table={table} dispatch={dispatch} />
+                  </section>
+                  <section className={panel} aria-label="Mão">
+                    <HandInput
+                      value={state.handText}
+                      parsed={parsed}
+                      onChange={(handText) => dispatch({ type: 'setHand', handText })}
+                    />
+                  </section>
+                </div>
+
+                <div className="space-y-4">
+                  <ActionResult
+                    hand={parsed}
+                    lookup={lookup}
+                    range={range}
+                    loading={loading}
+                    error={error}
+                  />
+                  {range && !error && <StackWarning spot={range} />}
+                  <EquityPanel query={query} hand={parsed} version={dataVersion} />
+                  <section className={`${panel} space-y-3`} aria-label="Range">
+                    <RangeGrid
+                      range={error ? null : (range?.range ?? null)}
+                      selectedHand={handClass}
+                      onSelect={(hand) => dispatch({ type: 'setHand', handText: hand })}
+                      loading={loading}
+                    />
+                    <Legend range={error ? null : range} />
+                  </section>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 
       <footer className="mx-auto max-w-6xl px-3 pb-8 text-xs text-slate-500 sm:px-4">
         Modelo simplificado: Nash aproximado em chipEV, com stacks iguais, ante de 0,125 bb por
-        jogador e só o primeiro call considerado (sem pots multiway). Não leva em conta ICM.
+        jogador e só o primeiro call considerado (sem pots multiway). Não leva em conta ICM. Os
+        ranges marcados como "personalizado" são os que você mesmo salvou.
       </footer>
     </div>
   )

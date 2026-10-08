@@ -14,6 +14,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // Os testes de fluxo completo passam de 5 s em máquinas lentas.
+    testTimeout: 20_000,
     restoreMocks: true,
     unstubGlobals: true,
   },

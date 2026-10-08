@@ -1,6 +1,10 @@
 import type {
+  CustomRange,
+  CustomRangeInput,
   EquityResponse,
+  ImportResult,
   LookupResponse,
+  ParsedRange,
   RangeResponse,
   SpotQuery,
   SpotsResponse,
@@ -33,6 +37,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         : `A API respondeu com erro ${response.status}.`
     throw new ApiError(response.status, detail)
   }
+  if (response.status === 204) return null as T
   return (await response.json()) as T
 }
 
@@ -80,11 +85,40 @@ export interface EquityRequest {
   seed?: number
 }
 
-export function postEquity(body: EquityRequest, signal?: AbortSignal): Promise<EquityResponse> {
-  return request<EquityResponse>('/api/equity', {
+function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return request<T>(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal,
   })
+}
+
+export function postEquity(body: EquityRequest, signal?: AbortSignal): Promise<EquityResponse> {
+  return postJson<EquityResponse>('/api/equity', body, signal)
+}
+
+/** Expande uma string de range ('22+,A2s+,KTo+:0.5') nas classes que ela cobre. */
+export function parseRangeText(text: string): Promise<ParsedRange> {
+  return postJson<ParsedRange>('/api/ranges/parse', { text })
+}
+
+export const CUSTOM_RANGES_EXPORT_URL = '/api/custom-ranges/export'
+
+export function listCustomRanges(signal?: AbortSignal): Promise<CustomRange[]> {
+  return request<CustomRange[]>('/api/custom-ranges', { signal })
+}
+
+/** Grava o range do spot; se já existir um para o mesmo spot, ele é substituído. */
+export function saveCustomRange(body: CustomRangeInput): Promise<CustomRange> {
+  return postJson<CustomRange>('/api/custom-ranges', body)
+}
+
+export async function deleteCustomRange(id: number): Promise<void> {
+  await request<null>(`/api/custom-ranges/${id}`, { method: 'DELETE' })
+}
+
+/** Importa um JSON exportado por `CUSTOM_RANGES_EXPORT_URL`. */
+export function importCustomRanges(document: unknown): Promise<ImportResult> {
+  return postJson<ImportResult>('/api/custom-ranges/import', document)
 }

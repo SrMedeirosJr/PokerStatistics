@@ -1,13 +1,14 @@
 import {
   ACTION_COLOR,
   ACTION_LABEL,
-  activeAction,
   describeFrequencies,
   formatNumber,
+  presentActions,
   scenarioLabel,
 } from '../lib/actions.ts'
 import type { ParsedHand } from '../lib/hands.ts'
 import type { LookupResponse, RangeResponse } from '../types.ts'
+import { CustomBadge } from './CustomBadge.tsx'
 
 interface ActionResultProps {
   hand: ParsedHand
@@ -21,16 +22,25 @@ const MIXED_COLOR = '#b45309'
 
 function headline(lookup: LookupResponse): string {
   if (lookup.recommendation !== 'mixed') return ACTION_LABEL[lookup.recommendation].toUpperCase()
-  const active = lookup.frequencies[activeAction(lookup.scenario)] ?? 0
-  return `MISTO ${Math.round(active * 100)}/${Math.round((1 - active) * 100)}`
+  const shares = presentActions(lookup.frequencies).map(([, frequency]) =>
+    Math.round(frequency * 100),
+  )
+  return `MISTO ${shares.join('/')}`
 }
 
-function StackNote({ spot }: { spot: RangeResponse }) {
+function StackNote({ spot, onColor = false }: { spot: RangeResponse; onColor?: boolean }) {
   const exact = spot.stack_requested === spot.stack_used
   return (
-    <p className="text-sm">
-      Tabela usada: <strong>{formatNumber(spot.stack_used)} bb</strong>
-      {!exact && ` (você informou ${formatNumber(spot.stack_requested)} bb; é a mais próxima)`}
+    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+      {spot.source === 'custom' && <CustomBadge onColor={onColor} />}
+      <span>
+        Tabela usada:{' '}
+        <strong>
+          {spot.source === 'custom' && spot.name ? `${spot.name} · ` : ''}
+          {formatNumber(spot.stack_used)} bb
+        </strong>
+        {!exact && ` (você informou ${formatNumber(spot.stack_requested)} bb; é a mais próxima)`}
+      </span>
     </p>
   )
 }
@@ -84,7 +94,7 @@ export function ActionResult({ hand, lookup, range, loading, error }: ActionResu
       </p>
       <p className="mt-1 text-base font-medium">{describeFrequencies(lookup.frequencies)}</p>
       <div className="mt-2 text-white/85">
-        <StackNote spot={lookup} />
+        <StackNote spot={lookup} onColor />
       </div>
     </div>
   )

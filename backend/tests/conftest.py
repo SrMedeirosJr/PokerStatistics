@@ -1,10 +1,25 @@
 import json
+import os
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
-from app.config import RANGES_DIR
+from app.config import DATABASE_URL_ENV, RANGES_DIR
 from app.solver.equity_matrix import EquityMatrix, load_equity_matrix
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_database(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Os testes usam um banco temporário, nunca os ranges personalizados do usuário."""
+    path = tmp_path_factory.mktemp("db") / "custom_ranges.db"
+    previous = os.environ.get(DATABASE_URL_ENV)
+    os.environ[DATABASE_URL_ENV] = f"sqlite:///{path.as_posix()}"
+    yield
+    if previous is None:
+        del os.environ[DATABASE_URL_ENV]
+    else:
+        os.environ[DATABASE_URL_ENV] = previous
 
 
 @pytest.fixture(scope="session")

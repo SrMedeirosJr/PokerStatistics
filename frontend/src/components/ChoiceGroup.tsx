@@ -1,6 +1,8 @@
 interface Option<T> {
   value: T
   label: string
+  /** Marca a opção com um ponto e explica o motivo no tooltip (ex.: range personalizado). */
+  mark?: string
 }
 
 interface ChoiceGroupProps<T> {
@@ -33,14 +35,22 @@ export function ChoiceGroup<T extends string | number>({
               type="button"
               role="radio"
               aria-checked={selected}
+              aria-label={option.mark ? `${option.label} (${option.mark})` : undefined}
+              title={option.mark}
               onClick={() => onChange(option.value)}
-              className={`min-w-10 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 ${
+              className={`relative min-w-10 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 ${
                 selected
                   ? 'bg-emerald-500 text-slate-950'
                   : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
               }`}
             >
               {option.label}
+              {option.mark && (
+                <span
+                  className="absolute -top-1 -right-1 size-2.5 rounded-full bg-violet-400 ring-2 ring-slate-900"
+                  aria-hidden
+                />
+              )}
             </button>
           )
         })}

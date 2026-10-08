@@ -27,11 +27,12 @@ function isLookup(data: RangeResponse | LookupResponse): data is LookupResponse 
 /**
  * Consulta /api/lookup (com mão) ou /api/ranges (sem mão) sempre que o spot ou a mão
  * mudam, com debounce. Enquanto a nova resposta não chega, o range anterior continua
- * disponível para a tela não piscar.
+ * disponível para a tela não piscar. Mudar `version` refaz a consulta do mesmo spot
+ * (usado quando um range personalizado é salvo ou excluído).
  */
-export function useSpotData(query: SpotQuery | null, hand: string | null): SpotData {
+export function useSpotData(query: SpotQuery | null, hand: string | null, version = 0): SpotData {
   const [loaded, setLoaded] = useState<Loaded | null>(null)
-  const key = query ? JSON.stringify([query, hand]) : null
+  const key = query ? JSON.stringify([query, hand, version]) : null
 
   useEffect(() => {
     if (!query || key === null) return

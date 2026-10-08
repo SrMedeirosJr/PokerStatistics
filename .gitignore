@@ -14,3 +14,6 @@ dist/
 # Local
 .env
 *.log
+
+# Ranges personalizados do usuário (SQLite)
+backend/data/*.db

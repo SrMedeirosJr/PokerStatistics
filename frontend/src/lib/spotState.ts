@@ -26,6 +26,7 @@ export type SpotAction =
   | { type: 'setPosition'; position: string }
   | { type: 'setScenario'; scenario: string }
   | { type: 'setHand'; handText: string }
+  | { type: 'selectSpot'; players: number; stack: number; position: string; scenario: string }
 
 export const initialSpotState: SpotState = {
   tables: [],
@@ -49,20 +50,27 @@ function nearest(options: number[], value: number): number {
   )
 }
 
+/** A posição pedida, se existir na mesa; senão o BTN (ou a primeira posição). */
+export function validPosition(table: TableInfo, position: string): string {
+  if (table.positions.includes(position)) return position
+  return table.positions.includes('BTN') ? 'BTN' : table.positions[0]
+}
+
+/** A situação pedida, se for possível para a posição; senão a situação padrão dela. */
+export function validScenario(table: TableInfo, position: string, scenario: string): string {
+  const scenarios = table.scenarios[position] ?? []
+  if (scenarios.includes(scenario)) return scenario
+  // O BB nunca abre o pote: o padrão dele é enfrentar o all-in do SB.
+  return scenarios.includes('open') ? 'open' : (scenarios.at(-1) ?? 'open')
+}
+
 /** Garante que mesa, posição, situação e stack existem nos dados carregados. */
 function withValidSpot(state: SpotState): SpotState {
   const table = currentTable(state) ?? state.tables[0]
   if (!table) return state
 
-  const position = table.positions.includes(state.position)
-    ? state.position
-    : table.positions.includes('BTN')
-      ? 'BTN'
-      : table.positions[0]
-  const scenarios = table.scenarios[position] ?? []
-  // O BB nunca abre o pote: o padrão dele é enfrentar o all-in do SB.
-  const fallback = scenarios.includes('open') ? 'open' : (scenarios.at(-1) ?? 'open')
-  const scenario = scenarios.includes(state.scenario) ? state.scenario : fallback
+  const position = validPosition(table, state.position)
+  const scenario = validScenario(table, position, state.scenario)
   const stack = table.stacks.length > 0 ? nearest(table.stacks, state.stack) : state.stack
   return { ...state, players: table.players, position, scenario, stack }
 }
@@ -87,6 +95,15 @@ export function spotReducer(state: SpotState, action: SpotAction): SpotState {
       return withValidSpot({ ...state, scenario: action.scenario })
     case 'setHand':
       return { ...state, handText: action.handText }
+    case 'selectSpot':
+      return withValidSpot({
+        ...state,
+        players: action.players,
+        stack: action.stack,
+        position: action.position,
+        scenario: action.scenario,
+        chipsMode: false,
+      })
   }
 }
 

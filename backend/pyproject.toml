@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
     "numpy>=1.26",
+    "sqlalchemy>=2.0",
     # eval7 só publica wheels até o CPython 3.12; acima disso usamos o fallback.
     "eval7>=0.1.10; python_version < '3.13'",
     "phevaluator>=0.5.3; python_version >= '3.13'",

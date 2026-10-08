@@ -45,6 +45,14 @@ npm test                           # testes (Vitest)
 npm run build                      # typecheck (tsc) + build de produção
 ```
 
+## Ranges personalizados
+
+Na aba "Meus ranges" dá para pintar um range (raise, call, all-in, fold) para qualquer
+spot e stack, ou colar uma string como `22+,A2s+,KTo+`. Os ranges salvos ficam em
+`backend/data/custom_ranges.db` (SQLite, fora do Git) e podem ser exportados e
+importados em JSON pela própria tela. Para usar outro banco, defina
+`POKER_DATABASE_URL` antes de subir o backend (ex.: `sqlite:///C:/dados/ranges.db`).
+
 ## Dados gerados
 
 A matriz de equity (`backend/data/equity_matrix.npz`) e os ranges

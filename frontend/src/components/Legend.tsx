@@ -1,6 +1,14 @@
-import { ACTION_COLOR, ACTION_LABEL, activeAction, formatNumber } from '../lib/actions.ts'
+import {
+  ACTION_COLOR,
+  ACTION_LABEL,
+  ACTION_ORDER,
+  activeAction,
+  combosByAction,
+  formatNumber,
+} from '../lib/actions.ts'
 import { TOTAL_COMBOS } from '../lib/hands.ts'
 import type { ActionName, RangeResponse } from '../types.ts'
+import { CustomBadge } from './CustomBadge.tsx'
 
 interface LegendProps {
   range: RangeResponse | null
@@ -15,23 +23,38 @@ function Swatch({ background, label }: { background: string; label: string }) {
   )
 }
 
+/** Ações que aparecem no range (fora o fold); num range do solver é só all-in ou call. */
+function playedActions(range: RangeResponse | null): ActionName[] {
+  if (!range) return ['allin']
+  if (range.source === 'solver') return [activeAction(range.scenario)]
+  const combos = combosByAction(range.range)
+  const present = ACTION_ORDER.filter((action) => action !== 'fold' && combos[action] > 0)
+  return present.length > 0 ? present : ['raise']
+}
+
 /** Legenda de cores do grid e tamanho do range (percentual e combos). */
 export function Legend({ range }: LegendProps) {
-  const active: ActionName = range ? activeAction(range.scenario) : 'allin'
-  const mixed = `linear-gradient(90deg, ${ACTION_COLOR[active]} 0% 50%, ${ACTION_COLOR.fold} 50% 100%)`
+  const actions = playedActions(range)
+  const mixed = `linear-gradient(90deg, ${ACTION_COLOR[actions[0]]} 0% 50%, ${ACTION_COLOR.fold} 50% 100%)`
+  const custom = range?.source === 'custom'
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-slate-300">
       <div className="flex flex-wrap gap-x-4 gap-y-1">
-        <Swatch background={ACTION_COLOR[active]} label={ACTION_LABEL[active]} />
+        {actions.map((action) => (
+          <Swatch key={action} background={ACTION_COLOR[action]} label={ACTION_LABEL[action]} />
+        ))}
         <Swatch background={ACTION_COLOR.fold} label={ACTION_LABEL.fold} />
         <Swatch background={mixed} label="Misto" />
       </div>
       {range && (
-        <p data-testid="range-size">
-          Range de {ACTION_LABEL[active].toLowerCase()}:{' '}
-          <strong className="text-slate-100">{formatNumber(range.range_pct)}%</strong> ·{' '}
-          {formatNumber(range.combos)} / {TOTAL_COMBOS} combos
+        <p data-testid="range-size" className="flex flex-wrap items-center gap-x-1.5">
+          {custom && <CustomBadge />}
+          <span>
+            {custom ? 'Mãos jogadas' : `Range de ${ACTION_LABEL[actions[0]].toLowerCase()}`}:{' '}
+            <strong className="text-slate-100">{formatNumber(range.range_pct)}%</strong> ·{' '}
+            {formatNumber(range.combos)} / {TOTAL_COMBOS} combos
+          </span>
         </p>
       )}
     </div>
