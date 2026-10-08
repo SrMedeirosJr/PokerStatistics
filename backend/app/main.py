@@ -1,10 +1,21 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_equity
+from app.api import routes_equity, routes_ranges
 from app.api.errors import install_error_handlers
+from app.services.range_store import RangeStore
 
-app = FastAPI(title="Poker Range Helper", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    app.state.range_store = RangeStore.from_directory()
+    yield
+
+
+app = FastAPI(title="Poker Range Helper", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,6 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 install_error_handlers(app)
+app.include_router(routes_ranges.router)
 app.include_router(routes_equity.router)
 
 

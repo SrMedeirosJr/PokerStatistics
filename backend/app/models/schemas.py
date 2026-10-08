@@ -23,3 +23,34 @@ class EquityResponse(BaseModel):
     tie: float
     lose: float
     equity: float
+
+
+class TableInfo(BaseModel):
+    players: int
+    stacks: list[float]
+    positions: list[str]
+    # Cenários válidos por posição: "open" e/ou "vs_{POS}".
+    scenarios: dict[str, list[str]]
+
+
+class SpotsResponse(BaseModel):
+    tables: list[TableInfo]
+
+
+class RangeResponse(BaseModel):
+    spot_id: str
+    players: int
+    position: str
+    scenario: str
+    stack_requested: float
+    stack_used: float
+    # Percentual e número de combos (de 1326) que dão all-in/call, ponderados pela frequência.
+    range_pct: float
+    combos: float
+    range: dict[str, dict[str, float]]
+
+
+class LookupResponse(RangeResponse):
+    hand: str
+    recommendation: str
+    frequencies: dict[str, float]

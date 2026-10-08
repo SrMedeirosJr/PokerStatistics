@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.core.errors import UserInputError
+from app.services.range_store import RangesUnavailableError
 
 _REQUEST_PARTS = {"query", "body", "path", "header", "cookie"}
 
@@ -62,3 +63,7 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(UserInputError)
     async def handle_user_input_error(_: Request, error: UserInputError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(error)})
+
+    @app.exception_handler(RangesUnavailableError)
+    async def handle_ranges_unavailable(_: Request, error: RangesUnavailableError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(error)})

@@ -368,3 +368,11 @@ _(O Claude registra aqui decisões tomadas durante a implementação.)_
   - AA/KK sempre all-in/call, monotonia no stack e convergência valem nos 1.560 spots.
 
   Os testes cobrem esses dois critérios integralmente de 5bb para cima e, abaixo disso, garantem que uma inversão só acontece com os ranges já saturados (push acima de 85%, call acima de 95%). Resolver de verdade exige pots multiway no solver, que está em "Futuro".
+
+### Fase 4 — API de ranges
+
+- `/api/spots` responde `{"tables": [{"players", "stacks", "positions", "scenarios"}]}`, com os cenários válidos por posição, para o frontend não precisar repetir a regra.
+- `/api/ranges` e `/api/lookup` devolvem, além do que o plano lista, `players`, `position`, `scenario` (já normalizados) e `combos` (combos do range ponderados pela frequência, para a legenda `466 / 1326`).
+- **Stack fora da lista:** usa o mais próximo; no empate (ex.: 9bb entre 8 e 10) usa o menor.
+- Se `stack` vier junto com `chips`/`big_blind`, vale o `stack`.
+- Mesa válida mas sem arquivo de ranges responde 404; qualquer entrada inválida responde 422.
