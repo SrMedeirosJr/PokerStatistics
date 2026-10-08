@@ -41,5 +41,17 @@ O Vite encaminha `/api` para `http://localhost:8000`, então o backend precisa e
 rodando para a página funcionar.
 
 ```powershell
+npm test                           # testes (Vitest)
 npm run build                      # typecheck (tsc) + build de produção
+```
+
+## Dados gerados
+
+A matriz de equity (`backend/data/equity_matrix.npz`) e os ranges
+(`backend/data/ranges/*.json`) já vêm no repositório, então o app roda sem executar o
+solver. Para gerar de novo, a partir de `backend/` com o venv ativo:
+
+```powershell
+python -m app.solver.equity_matrix --boards 100000 --seed 20261008     # ~8 min
+python -m app.solver.generate --players 2-9 --stacks 3,4,5,6,7,8,10,12,15,20 --ante 0.125
 ```

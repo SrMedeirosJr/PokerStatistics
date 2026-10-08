@@ -376,3 +376,13 @@ _(O Claude registra aqui decisões tomadas durante a implementação.)_
 - **Stack fora da lista:** usa o mais próximo; no empate (ex.: 9bb entre 8 e 10) usa o menor.
 - Se `stack` vier junto com `chips`/`big_blind`, vale o `stack`.
 - Mesa válida mas sem arquivo de ranges responde 404; qualquer entrada inválida responde 422.
+
+### Fase 5 — Frontend principal
+
+- **Testes do frontend com Vitest + Testing Library** (não estavam na stack do plano), rodando o `App` contra uma API falsa (`src/test/fakeApi.ts`). O aceite também foi conferido no Edge de verdade, contra o backend real, em 1280 px e 390 px de largura.
+- Sem mão válida a tela consulta `/api/ranges` para já mostrar o grid do spot; com mão válida consulta `/api/lookup`. As duas chamadas usam o debounce de 200 ms.
+- A validação da mão ao digitar repete no frontend as regras do backend (`src/lib/hands.ts`), para não depender de uma chamada à API.
+- O seletor visual de cartas começa recolhido em telas estreitas, para o resultado aparecer sem rolar muito.
+- Os campos "fichas" e "big blind" aceitam o formato brasileiro (`12.500`, `1,5`).
+- O tooltip do grid é o `title` nativo do navegador; no celular, tocar na célula seleciona a mão e o card mostra as frequências.
+- A tela avisa quando o stack usado é menor que 5 bb (saturação do modelo) e quando o stack informado passa de 25 bb (push/fold deixa de ser a estratégia adequada).
