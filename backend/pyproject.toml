@@ -31,6 +31,10 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+    # O eval7 usa nomes antigos do pyparsing ao ser importado.
+    "ignore::DeprecationWarning:eval7.rangestring",
+]
 
 [tool.ruff]
 line-length = 100

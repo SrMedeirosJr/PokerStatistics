@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import combinations
 
+from app.core.errors import UserInputError
+
 RANKS = "AKQJT98765432"
 SUITS = "shdc"
 
@@ -16,7 +18,7 @@ _SUIT_SYMBOLS = {"♠": "s", "♥": "h", "♦": "d", "♣": "c"}
 _HAND_EXAMPLES = "K9o, AKs, 99 ou Kh9d"
 
 
-class HandParseError(ValueError):
+class HandParseError(UserInputError):
     """Mão ou carta inválida. A mensagem vai direto para o usuário (em português)."""
 
 

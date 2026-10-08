@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.core.errors import UserInputError
+
 MIN_PLAYERS = 2
 MAX_PLAYERS = 9
 
@@ -22,7 +24,7 @@ _VS_PREFIX = "vs_"
 _ALIASES = {"UTG+1": "UTG1", "UTG+2": "UTG2"}
 
 
-class PositionError(ValueError):
+class PositionError(UserInputError):
     """Mesa, posição ou cenário inválido. A mensagem vai para o usuário (em português)."""
 
 

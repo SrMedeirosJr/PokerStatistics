@@ -10,13 +10,14 @@ import re
 from collections.abc import Iterable, Mapping
 
 from app.core.cards import HAND_CLASS_INDEX, RANK_INDEX, RANKS
+from app.core.errors import UserInputError
 
 _HAND = r"([AKQJT98765432])([AKQJT98765432])([so]?)"
 _TOKEN = re.compile(rf"^{_HAND}(?:(\+)|-{_HAND})?$")
 _SEPARATORS = re.compile(r"[,;\s]+")
 
 
-class RangeParseError(ValueError):
+class RangeParseError(UserInputError):
     """Range inválido. A mensagem vai direto para o usuário (em português)."""
 
 
