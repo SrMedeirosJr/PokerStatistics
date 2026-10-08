@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type Ref, useState } from 'react'
 
 import {
   type ParsedHand,
@@ -14,6 +14,9 @@ interface HandInputProps {
   value: string
   parsed: ParsedHand
   onChange: (text: string) => void
+  /** Chamado ao apertar Enter no campo (a aba de torneio usa para ir à próxima mão). */
+  onSubmit?: () => void
+  inputRef?: Ref<HTMLInputElement>
 }
 
 interface DraftCard {
@@ -64,7 +67,7 @@ const pickButton =
   'rounded py-1 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-400 disabled:cursor-not-allowed disabled:opacity-30'
 
 /** Mão do herói: campo de texto validado ao digitar e seletor visual de duas cartas. */
-export function HandInput({ value, parsed, onChange }: HandInputProps) {
+export function HandInput({ value, parsed, onChange, onSubmit, inputRef }: HandInputProps) {
   const [draft, setDraft] = useState<Draft>(() => draftFromParsed(parsed) ?? EMPTY_DRAFT)
   const [seenValue, setSeenValue] = useState(value)
   const [emitted, setEmitted] = useState<string | null>(null)
@@ -103,9 +106,16 @@ export function HandInput({ value, parsed, onChange }: HandInputProps) {
         <div className="flex gap-2">
           <input
             id="hand-input"
+            ref={inputRef}
             type="text"
             value={value}
             onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && onSubmit) {
+                event.preventDefault()
+                onSubmit()
+              }
+            }}
             placeholder="K9o, AKs, 99 ou Kh9d"
             autoComplete="off"
             autoCapitalize="off"

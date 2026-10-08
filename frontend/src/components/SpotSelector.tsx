@@ -1,8 +1,8 @@
 import type { Dispatch } from 'react'
 
-import { formatNumber, scenarioLabel } from '../lib/actions.ts'
+import { formatNumber, scenarioHelp, scenarioLabel, stackMark } from '../lib/actions.ts'
 import { chipsStack, type SpotAction, type SpotState } from '../lib/spotState.ts'
-import type { TableInfo } from '../types.ts'
+import type { RangeSource, TableInfo } from '../types.ts'
 import { ChoiceGroup } from './ChoiceGroup.tsx'
 import { CustomBadge } from './CustomBadge.tsx'
 import { PositionHelper } from './PositionHelper.tsx'
@@ -11,15 +11,16 @@ interface SpotSelectorProps {
   state: SpotState
   table: TableInfo
   dispatch: Dispatch<SpotAction>
+  /** De onde vem o range mostrado agora; muda a explicação da situação. */
+  source?: RangeSource
 }
 
 const inputClass =
   'w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none'
 
 /** Seletores do spot: jogadores, stack (em bb ou fichas), posição e situação. */
-export function SpotSelector({ state, table, dispatch }: SpotSelectorProps) {
+export function SpotSelector({ state, table, dispatch, source = 'solver' }: SpotSelectorProps) {
   const converted = chipsStack(state)
-  const customStacks = new Set(table.custom_spots.map((spot) => spot.stack))
 
   return (
     <div className="space-y-4">
@@ -75,7 +76,7 @@ export function SpotSelector({ state, table, dispatch }: SpotSelectorProps) {
           options={table.stacks.map((stack) => ({
             value: stack,
             label: formatNumber(stack),
-            mark: customStacks.has(stack) ? 'tem range personalizado' : undefined,
+            ...stackMark(stack, table),
           }))}
           value={state.chipsMode ? null : state.stack}
           onChange={(stack) => dispatch({ type: 'setStack', stack })}
@@ -143,11 +144,7 @@ export function SpotSelector({ state, table, dispatch }: SpotSelectorProps) {
         value={state.scenario}
         onChange={(scenario) => dispatch({ type: 'setScenario', scenario })}
       />
-      <p className="text-xs text-slate-500">
-        {state.scenario === 'open'
-          ? 'Open: todos antes de você foldaram e você é o primeiro a entrar no pote.'
-          : `${scenarioLabel(state.scenario)}: essa posição deu all-in e quem estava entre vocês foldou.`}
-      </p>
+      <p className="text-xs text-slate-500">{scenarioHelp(state.scenario, source)}</p>
     </div>
   )
 }

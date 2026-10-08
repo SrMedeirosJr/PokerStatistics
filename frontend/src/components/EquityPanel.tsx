@@ -1,13 +1,15 @@
 import { EQUITY_ITERATIONS, useEquity } from '../hooks/useEquity.ts'
 import { formatNumber, formatPercent } from '../lib/actions.ts'
 import { type ParsedHand, SUIT_SYMBOL } from '../lib/hands.ts'
-import type { SpotQuery } from '../types.ts'
+import type { RangeSource, SpotQuery } from '../types.ts'
 
 interface EquityPanelProps {
   query: SpotQuery | null
   hand: ParsedHand
   /** Muda quando os ranges personalizados mudam, para recalcular. */
   version?: number
+  /** De onde vem o range do herói; decide o texto enquanto o do adversário não chega. */
+  source?: RangeSource
 }
 
 const panel = 'rounded-xl border border-slate-800 bg-slate-900 p-4'
@@ -28,8 +30,11 @@ function heroHand(hand: ParsedHand): { request: string; display: string } | null
   }
 }
 
-/** Equity da mão contra o range de all-in de quem empurrou; só aparece em 'vs_{POS}'. */
-export function EquityPanel({ query, hand, version = 0 }: EquityPanelProps) {
+/**
+ * Equity da mão contra o range de quem entrou no pote antes: o all-in nas tabelas de
+ * push/fold, o raise de abertura nas de stack fundo. Só aparece em 'vs_{POS}'.
+ */
+export function EquityPanel({ query, hand, version = 0, source = 'solver' }: EquityPanelProps) {
   const hero = heroHand(hand)
   const { pusher, pusherRange, equity, loading, error } = useEquity(
     query,
@@ -38,14 +43,17 @@ export function EquityPanel({ query, hand, version = 0 }: EquityPanelProps) {
   )
 
   if (!pusher) return null
-  const title = `Equity contra o all-in do ${pusher}`
+  const allIn = (pusherRange?.source ?? source) === 'solver'
+  const villain = allIn ? `all-in do ${pusher}` : `raise do ${pusher}`
+  const villainRange = allIn ? `range de all-in do ${pusher}` : `range de abertura do ${pusher}`
+  const title = `Equity contra o ${villain}`
 
   if (!hero) {
     return (
       <section className={panel} aria-label={title}>
         <h2 className="text-sm font-semibold text-slate-200">{title}</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Informe sua mão para ver quanto ela ganha contra o range de all-in do {pusher}.
+          Informe sua mão para ver quanto ela ganha contra o {villainRange}.
         </p>
       </section>
     )
@@ -71,9 +79,8 @@ export function EquityPanel({ query, hand, version = 0 }: EquityPanelProps) {
             {formatPercent(equity.equity)}
           </p>
           <p className="text-sm text-slate-400">
-            {hero.display} contra o range de all-in do {pusher} (
-            {formatNumber(pusherRange.range_pct)}% das mãos, tabela de{' '}
-            {formatNumber(pusherRange.stack_used)} bb)
+            {hero.display} contra o {villainRange} ({formatNumber(pusherRange.range_pct)}% das
+            mãos, tabela de {formatNumber(pusherRange.stack_used)} bb)
           </p>
           <div
             className="mt-3 flex h-3 overflow-hidden rounded-full bg-slate-800"
@@ -105,8 +112,9 @@ export function EquityPanel({ query, hand, version = 0 }: EquityPanelProps) {
             ))}
           </dl>
           <p className="mt-2 text-xs text-slate-500">
-            Estimativa por Monte Carlo com {formatNumber(EQUITY_ITERATIONS)} simulações. A equity
-            conta empate como meia vitória.
+            Estimativa por Monte Carlo com {formatNumber(EQUITY_ITERATIONS)} simulações, como se
+            as cinco cartas da mesa saíssem sem mais apostas. A equity conta empate como meia
+            vitória.
           </p>
         </div>
       )}

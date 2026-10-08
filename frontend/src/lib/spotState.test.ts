@@ -20,7 +20,7 @@ function table(players: number, positions: string[]): TableInfo {
       return [position, position === 'BB' ? facing : ['open', ...facing]]
     }),
   )
-  return { players, stacks: STACKS, positions, scenarios, custom_spots: [] }
+  return { players, stacks: STACKS, reference_stacks: [], positions, scenarios, custom_spots: [] }
 }
 
 const TABLES = [

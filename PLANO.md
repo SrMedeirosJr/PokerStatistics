@@ -399,7 +399,7 @@ _(O Claude registra aqui decisões tomadas durante a implementação.)_
 
 - **SQLAlchemy 2** (e não SQLModel), com SQLite em `backend/data/custom_ranges.db`. O arquivo fica fora do Git por ser dado do usuário; a variável `POKER_DATABASE_URL` aponta para outro banco. Os testes sempre usam um banco temporário.
 - **Um range por spot** (mesa, stack, posição, situação). `POST /api/custom-ranges` grava e, se já existir um range para o mesmo spot, substitui; não há `PUT`. `DELETE /api/custom-ranges/{id}` exclui.
-- **Como o lookup escolhe.** Para um spot concorrem os stacks gerados pelo solver e os dos ranges personalizados desse mesmo spot; vale o mais próximo do stack pedido e, no empate, o menor. Se houver os dois no stack escolhido, vale o personalizado. Exemplo com um open de CO em 40 bb salvo: pedir 35 bb usa o personalizado; pedir 30 bb (empate entre 20 e 40) usa a tabela de 20 bb do solver; BTN com 40 bb continua na tabela de 20 bb.
+- **Como o lookup escolhe.** Para um spot concorrem os stacks gerados pelo solver e os dos ranges personalizados desse mesmo spot; vale o mais próximo do stack pedido e, no empate, o menor. Se houver os dois no stack escolhido, vale o personalizado. Exemplo com um open de CO em 30 bb salvo (os vizinhos são as tabelas de 25 e 40 bb): pedir 34 bb usa o personalizado; pedir 36 bb usa a tabela de 40 bb; BTN com 30 bb usa a de 25 bb.
 - As respostas de `/api/ranges` e `/api/lookup` ganharam `source` (`solver` ou `custom`), `custom_id` e `name`. Em `/api/spots`, cada mesa ganhou `custom_spots` e os stacks personalizados entram em `stacks`.
 - Ações aceitas num range personalizado: `allin`, `raise`, `call` e `fold`, com frequências de 3 casas; o que faltar para 100% numa mão vira fold.
 - **Colar um range** usa `POST /api/ranges/parse`, que reaproveita o parser do backend (inclusive pesos), em vez de reescrever o parser no frontend.
@@ -407,3 +407,20 @@ _(O Claude registra aqui decisões tomadas durante a implementação.)_
 - O editor fica numa aba "Meus ranges": escolhe-se a ação do pincel e pinta-se clicando ou arrastando. O selo "personalizado" aparece na lista de ranges salvos, no atalho "Seus ranges nesta mesa" dos seletores, no card da recomendação e na legenda; o botão do stack ganha um ponto roxo.
 - Em `vs_{POS}`, o painel de equity usa as mãos de all-in do range de `open` de quem empurrou. Se esse range for um personalizado sem nenhum all-in, o painel avisa em vez de calcular.
 - Os avisos de stack (abaixo de 5 bb, acima da maior tabela) só aparecem para ranges do solver.
+
+### Depois do plano — stack fundo e aba de torneio
+
+Pedidos feitos depois de as 8 fases estarem prontas.
+
+- **Tabelas de referência para 25, 40, 60 e 100 bb** (`app/reference/`, arquivos em `backend/data/reference/`). Acima de 20 bb o app mostrava a tabela de push/fold de 20 bb, que manda dar all-in onde a jogada é raise. Agora há tabelas com raise, 3-bet, call e fold, com tamanho sugerido de aposta.
+  - **Não são solução de solver.** Com stack fundo a decisão depende do jogo pós-flop, que o projeto não modela. Cada mão recebe uma nota (equity da matriz do projeto contra uma mistura de mão aleatória e range forte, mais um bônus para mãos do mesmo naipe, conectadas e pares) e cada posição joga as melhores até uma largura fixa. Os parâmetros ficam no topo de `app/reference/model.py` e foram ajustados à mão para os ranges ficarem parecidos com tabelas usuais de abertura.
+  - Em `open`: raise ou fold (2,2 bb; 3 bb no SB; 2 bb e 2,5 bb com 25 bb). Não há limp, nem no SB.
+  - Em `vs_{POS}`: quem veio antes abriu com raise. 3-bet por valor com as mãos de maior equity contra a parte forte do range dele, call com as do meio, 3-bet de blefe com as mais fracas que têm bloqueador (A ou K do mesmo naipe). 3-bet de 3x o raise em posição e 4x nos blinds. Com 25 bb o 3-bet é all-in e não há blefe.
+  - Não cobre a resposta a um 3-bet nem potes com mais de um jogador antes do herói.
+  - Um teste gera as tabelas de novo e compara com os arquivos versionados, para o código e os dados não saírem de sincronia. Para gerar: `python -m app.reference.generate`.
+- **`vs_{POS}` muda de sentido conforme a tabela:** nas de push/fold a posição deu all-in; nas de referência (e nas personalizadas) abriu com raise. A tela explica qual é o caso e chama o raise do herói de "3-bet".
+- A API ganhou `source: "reference"`, `sizes` (tamanho de cada aposta, em bb) nas respostas de range e `reference_stacks` em `/api/spots`. O stack mais próximo é escolhido entre todas as tabelas: 22 bb usa o push/fold de 20 bb, 23 bb já usa a referência de 25 bb. Um range personalizado no mesmo stack continua tendo prioridade.
+- O painel de equity em `vs_{POS}` passou a usar todas as mãos com que a posição entra no pote (all-in ou raise), e diz contra qual dos dois é.
+- No editor, "Partir da tabela atual" preenche o grid com o que a consulta mostra para o spot, para ajustar uma tabela de referência e salvar como personalizada.
+- **Aba "Torneio".** A posição roda sozinha a cada mão (BB → SB → BTN → CO → … → UTG → BB), o stack em bb sai das fichas e do big blind informados, e a tela mostra quantas mãos faltam para o BB e o SB, o custo de uma volta (SB + BB + ante × jogadores) e quantas voltas o stack paga. Enter no campo da mão passa para a próxima; "Voltar" desfaz. A sessão e as últimas 30 mãos ficam no `localStorage` do navegador.
+- **A mão continua sendo digitada.** Ler as cartas direto da tela do cliente de poker não foi implementado de propósito: é o tipo de software que os sites classificam como assistência em tempo real (RTA) e banem.

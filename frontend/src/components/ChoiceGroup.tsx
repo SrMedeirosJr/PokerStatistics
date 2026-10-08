@@ -3,6 +3,8 @@ interface Option<T> {
   label: string
   /** Marca a opção com um ponto e explica o motivo no tooltip (ex.: range personalizado). */
   mark?: string
+  /** Cor do ponto (classe do Tailwind); roxo por padrão. */
+  markClass?: string
 }
 
 interface ChoiceGroupProps<T> {
@@ -47,7 +49,9 @@ export function ChoiceGroup<T extends string | number>({
               {option.label}
               {option.mark && (
                 <span
-                  className="absolute -top-1 -right-1 size-2.5 rounded-full bg-violet-400 ring-2 ring-slate-900"
+                  className={`absolute -top-1 -right-1 size-2.5 rounded-full ring-2 ring-slate-900 ${
+                    option.markClass ?? 'bg-violet-400'
+                  }`}
                   aria-hidden
                 />
               )}

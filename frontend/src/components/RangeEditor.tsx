@@ -2,7 +2,7 @@ import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
 
 import {
   ACTION_COLOR,
-  ACTION_LABEL,
+  actionLabel,
   ACTION_ORDER,
   combosByAction,
   formatNumber,
@@ -12,6 +12,7 @@ import {
 import {
   CUSTOM_RANGES_EXPORT_URL,
   deleteCustomRange,
+  getRange,
   importCustomRanges,
   listCustomRanges,
   parseRangeText,
@@ -19,7 +20,7 @@ import {
 } from '../lib/api.ts'
 import { HAND_GRID, TOTAL_COMBOS } from '../lib/hands.ts'
 import { parseAmount, validPosition, validScenario } from '../lib/spotState.ts'
-import type { ActionName, CustomRange, RangeMap, TableInfo } from '../types.ts'
+import type { ActionName, CustomRange, RangeMap, RangeSource, TableInfo } from '../types.ts'
 import { ChoiceGroup } from './ChoiceGroup.tsx'
 import { CustomBadge } from './CustomBadge.tsx'
 import { RangeGrid } from './RangeGrid.tsx'
@@ -38,6 +39,12 @@ interface Feedback {
 }
 
 const BRUSHES: ActionName[] = ['raise', 'call', 'allin', 'fold']
+
+const SOURCE_NAME: Record<RangeSource, string> = {
+  solver: 'a tabela de push/fold',
+  reference: 'a tabela de referência',
+  custom: 'o seu range',
+}
 
 const panel = 'rounded-xl border border-slate-800 bg-slate-900 p-4'
 const inputClass =
@@ -134,7 +141,7 @@ export function RangeEditor({ tables, onChanged, onConsult }: RangeEditorProps) 
         return next
       })
       const count = Object.keys(parsed.hands).length
-      return `${count} ${count === 1 ? 'mão marcada' : 'mãos marcadas'} como ${ACTION_LABEL[brush]}.`
+      return `${count} ${count === 1 ? 'mão marcada' : 'mãos marcadas'} como ${actionLabel(brush, currentScenario)}.`
     })
   }
 
@@ -157,6 +164,25 @@ export function RangeEditor({ tables, onChanged, onConsult }: RangeEditorProps) 
       await refresh()
       onChanged()
       return `Range salvo: ${record.name}.`
+    })
+  }
+
+  /** Parte do range que a consulta mostra hoje para o spot (referência, solver ou seu). */
+  function loadCurrent() {
+    const stack = parseAmount(stackText)
+    if (stack === null) {
+      setFeedback({ kind: 'error', text: 'Informe o stack em big blinds (ex.: 40).' })
+      return
+    }
+    void run(async () => {
+      const current = await getRange({
+        players,
+        position: currentPosition,
+        scenario: currentScenario,
+        stack: { stack },
+      })
+      setActions(playedHands(current.range))
+      return `Grid preenchido com ${SOURCE_NAME[current.source]} de ${formatNumber(current.stack_used)} bb. Ajuste e salve.`
     })
   }
 
@@ -268,7 +294,7 @@ export function RangeEditor({ tables, onChanged, onConsult }: RangeEditorProps) 
                     brush === action ? 'ring-2 ring-amber-300' : 'opacity-60 hover:opacity-90'
                   }`}
                 >
-                  {ACTION_LABEL[action]}
+                  {actionLabel(action, currentScenario)}
                 </button>
               ))}
             </div>
@@ -323,7 +349,14 @@ export function RangeEditor({ tables, onChanged, onConsult }: RangeEditorProps) 
             >
               Limpar grid
             </button>
+            <button type="button" onClick={loadCurrent} disabled={busy} className={secondaryButton}>
+              Partir da tabela atual
+            </button>
           </div>
+          <p className="text-xs text-slate-500">
+            "Partir da tabela atual" preenche o grid com o que a consulta mostra hoje para esse
+            spot (referência, solver ou um range seu), para você só ajustar.
+          </p>
 
           {feedback && (
             <p
@@ -338,7 +371,12 @@ export function RangeEditor({ tables, onChanged, onConsult }: RangeEditorProps) 
 
       <div className="space-y-4">
         <section className={`${panel} space-y-3`} aria-label="Grid do range">
-          <RangeGrid range={range} onPaint={paint} label="Grid do range em edição" />
+          <RangeGrid
+            range={range}
+            onPaint={paint}
+            label="Grid do range em edição"
+            scenario={currentScenario}
+          />
           <p data-testid="editor-summary" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-300">
             {ACTION_ORDER.map((action) => (
               <span key={action} className="flex items-center gap-1.5">
@@ -347,7 +385,7 @@ export function RangeEditor({ tables, onChanged, onConsult }: RangeEditorProps) 
                   style={{ background: ACTION_COLOR[action] }}
                   aria-hidden
                 />
-                {ACTION_LABEL[action]} {formatPercent(combos[action] / TOTAL_COMBOS)}
+                {actionLabel(action, currentScenario)} {formatPercent(combos[action] / TOTAL_COMBOS)}
               </span>
             ))}
           </p>

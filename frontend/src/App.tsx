@@ -1,21 +1,18 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 
-import { ActionResult } from './components/ActionResult.tsx'
-import { EquityPanel } from './components/EquityPanel.tsx'
 import { HandInput } from './components/HandInput.tsx'
-import { Legend } from './components/Legend.tsx'
 import { RangeEditor } from './components/RangeEditor.tsx'
-import { RangeGrid } from './components/RangeGrid.tsx'
+import { SpotResult } from './components/SpotResult.tsx'
 import { SpotSelector } from './components/SpotSelector.tsx'
+import { TournamentTracker } from './components/TournamentTracker.tsx'
 import { useSpotData } from './hooks/useSpotData.ts'
-import { formatNumber } from './lib/actions.ts'
 import { getHealth, getSpots } from './lib/api.ts'
 import { parseHand } from './lib/hands.ts'
 import { buildQuery, currentTable, initialSpotState, spotReducer } from './lib/spotState.ts'
-import type { CustomRange, RangeResponse } from './types.ts'
+import type { CustomRange } from './types.ts'
 
 type ApiStatus = 'checking' | 'online' | 'offline'
-type View = 'consult' | 'editor'
+type View = 'consult' | 'tournament' | 'editor'
 
 const STATUS_LABEL: Record<ApiStatus, string> = {
   checking: 'Verificando API…',
@@ -31,37 +28,11 @@ const STATUS_DOT: Record<ApiStatus, string> = {
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'consult', label: 'Consultar' },
+  { id: 'tournament', label: 'Torneio' },
   { id: 'editor', label: 'Meus ranges' },
 ]
 
-/** Abaixo disso o modelo "só o primeiro call" satura (ver Decisões no PLANO.md). */
-const SATURATED_BELOW_BB = 5
-
 const panel = 'rounded-xl border border-slate-800 bg-slate-900 p-4'
-const warning = 'rounded-md border border-amber-500/40 bg-amber-950/40 p-3 text-sm text-amber-200'
-
-/** Avisos sobre os limites dos ranges gerados; não valem para ranges personalizados. */
-function StackWarning({ spot }: { spot: RangeResponse }) {
-  if (spot.source !== 'solver') return null
-  if (spot.stack_requested > spot.stack_used * 1.25) {
-    return (
-      <p className={warning}>
-        Com {formatNumber(spot.stack_requested)} bb o jogo já não é só all-in ou fold. O que
-        aparece aqui é a tabela de {formatNumber(spot.stack_used)} bb, a maior gerada. Para stacks
-        maiores, crie o seu range em "Meus ranges".
-      </p>
-    )
-  }
-  if (spot.stack_used < SATURATED_BELOW_BB) {
-    return (
-      <p className={warning}>
-        Com menos de {SATURATED_BELOW_BB} bb a simplificação do modelo (só o primeiro call conta)
-        pesa mais e os ranges saem bem largos. Use com cautela.
-      </p>
-    )
-  }
-  return null
-}
 
 export default function App() {
   const [state, dispatch] = useReducer(spotReducer, initialSpotState)
@@ -101,7 +72,8 @@ export default function App() {
   const handClass = parsed.status === 'valid' ? parsed.handClass : null
   const table = currentTable(state)
   const query = buildQuery(state)
-  const { range, lookup, loading, error } = useSpotData(query, handClass, dataVersion)
+  // A aba de torneio faz a própria consulta; aqui só enquanto a consulta está aberta.
+  const data = useSpotData(view === 'consult' ? query : null, handClass, dataVersion)
 
   function retry() {
     setApiStatus('checking')
@@ -132,7 +104,9 @@ export default function App() {
       <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 py-4 sm:px-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Poker Range Helper</h1>
-          <p className="text-sm text-slate-400">Push/fold para MTT · stacks de 3 a 20 bb</p>
+          <p className="text-sm text-slate-400">
+            MTT · push/fold de 3 a 20 bb · referência de 25 a 100 bb
+          </p>
         </div>
         <span className="flex shrink-0 items-center gap-2 text-sm text-slate-300">
           <span className={`size-2.5 rounded-full ${STATUS_DOT[apiStatus]}`} aria-hidden />
@@ -194,11 +168,20 @@ export default function App() {
               />
             )}
 
+            {view === 'tournament' && (
+              <TournamentTracker tables={state.tables} version={dataVersion} />
+            )}
+
             {view === 'consult' && (
               <div className="grid gap-4 lg:grid-cols-[23rem_minmax(0,1fr)] lg:items-start">
                 <div className="space-y-4">
                   <section className={panel} aria-label="Spot">
-                    <SpotSelector state={state} table={table} dispatch={dispatch} />
+                    <SpotSelector
+                      state={state}
+                      table={table}
+                      dispatch={dispatch}
+                      source={data.range?.source}
+                    />
                   </section>
                   <section className={panel} aria-label="Mão">
                     <HandInput
@@ -209,26 +192,13 @@ export default function App() {
                   </section>
                 </div>
 
-                <div className="space-y-4">
-                  <ActionResult
-                    hand={parsed}
-                    lookup={lookup}
-                    range={range}
-                    loading={loading}
-                    error={error}
-                  />
-                  {range && !error && <StackWarning spot={range} />}
-                  <EquityPanel query={query} hand={parsed} version={dataVersion} />
-                  <section className={`${panel} space-y-3`} aria-label="Range">
-                    <RangeGrid
-                      range={error ? null : (range?.range ?? null)}
-                      selectedHand={handClass}
-                      onSelect={(hand) => dispatch({ type: 'setHand', handText: hand })}
-                      loading={loading}
-                    />
-                    <Legend range={error ? null : range} />
-                  </section>
-                </div>
+                <SpotResult
+                  query={query}
+                  hand={parsed}
+                  data={data}
+                  version={dataVersion}
+                  onSelectHand={(hand) => dispatch({ type: 'setHand', handText: hand })}
+                />
               </div>
             )}
           </>
@@ -236,9 +206,9 @@ export default function App() {
       </main>
 
       <footer className="mx-auto max-w-6xl px-3 pb-8 text-xs text-slate-500 sm:px-4">
-        Modelo simplificado: Nash aproximado em chipEV, com stacks iguais, ante de 0,125 bb por
-        jogador e só o primeiro call considerado (sem pots multiway). Não leva em conta ICM. Os
-        ranges marcados como "personalizado" são os que você mesmo salvou.
+        Até 20 bb: Nash aproximado em chipEV (stacks iguais, ante de 0,125 bb por jogador, só o
+        primeiro call considerado, sem ICM). De 25 a 100 bb: tabelas de referência por heurística,
+        não por solver. "Personalizado" marca os ranges que você mesmo salvou.
       </footer>
     </div>
   )

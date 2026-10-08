@@ -1,14 +1,15 @@
 import {
   ACTION_COLOR,
-  ACTION_LABEL,
+  actionLabel,
   describeFrequencies,
   formatNumber,
   presentActions,
+  recommendationHeadline,
   scenarioLabel,
 } from '../lib/actions.ts'
 import type { ParsedHand } from '../lib/hands.ts'
 import type { LookupResponse, RangeResponse } from '../types.ts'
-import { CustomBadge } from './CustomBadge.tsx'
+import { SourceBadge } from './CustomBadge.tsx'
 
 interface ActionResultProps {
   hand: ParsedHand
@@ -20,29 +21,33 @@ interface ActionResultProps {
 
 const MIXED_COLOR = '#b45309'
 
-function headline(lookup: LookupResponse): string {
-  if (lookup.recommendation !== 'mixed') return ACTION_LABEL[lookup.recommendation].toUpperCase()
-  const shares = presentActions(lookup.frequencies).map(([, frequency]) =>
-    Math.round(frequency * 100),
-  )
-  return `MISTO ${shares.join('/')}`
+function tableName(spot: RangeResponse): string {
+  const stack = `${formatNumber(spot.stack_used)} bb`
+  if (spot.source === 'custom' && spot.name) return `${spot.name} · ${stack}`
+  return stack
 }
 
 function StackNote({ spot, onColor = false }: { spot: RangeResponse; onColor?: boolean }) {
   const exact = spot.stack_requested === spot.stack_used
   return (
     <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-      {spot.source === 'custom' && <CustomBadge onColor={onColor} />}
+      <SourceBadge source={spot.source} onColor={onColor} />
       <span>
-        Tabela usada:{' '}
-        <strong>
-          {spot.source === 'custom' && spot.name ? `${spot.name} · ` : ''}
-          {formatNumber(spot.stack_used)} bb
-        </strong>
+        Tabela usada: <strong>{tableName(spot)}</strong>
         {!exact && ` (você informou ${formatNumber(spot.stack_requested)} bb; é a mais próxima)`}
       </span>
     </p>
   )
+}
+
+/** 'Raise para 3 bb' para cada ação da mão que tem tamanho sugerido. */
+function sizeHints(lookup: LookupResponse): string[] {
+  return presentActions(lookup.frequencies).flatMap(([action]) => {
+    const size = lookup.sizes[action]
+    return size === undefined
+      ? []
+      : [`${actionLabel(action, lookup.scenario)} para ${formatNumber(size)} bb`]
+  })
 }
 
 /** Card grande com a ação recomendada para a mão, e o stack realmente usado. */
@@ -79,6 +84,7 @@ export function ActionResult({ hand, lookup, range, loading, error }: ActionResu
 
   const color =
     lookup.recommendation === 'mixed' ? MIXED_COLOR : ACTION_COLOR[lookup.recommendation]
+  const sizes = sizeHints(lookup)
   return (
     <div
       aria-live="polite"
@@ -90,9 +96,16 @@ export function ActionResult({ hand, lookup, range, loading, error }: ActionResu
         {scenarioLabel(lookup.scenario)}
       </p>
       <p data-testid="recommendation" className="mt-1 text-4xl font-black tracking-tight sm:text-5xl">
-        {headline(lookup)}
+        {recommendationHeadline(lookup.recommendation, lookup.frequencies, lookup.scenario)}
       </p>
-      <p className="mt-1 text-base font-medium">{describeFrequencies(lookup.frequencies)}</p>
+      <p className="mt-1 text-base font-medium">
+        {describeFrequencies(lookup.frequencies, lookup.scenario)}
+      </p>
+      {sizes.length > 0 && (
+        <p data-testid="bet-size" className="text-sm font-medium text-white/90">
+          Tamanho sugerido: {sizes.join(' · ')}
+        </p>
+      )}
       <div className="mt-2 text-white/85">
         <StackNote spot={lookup} onColor />
       </div>

@@ -4,4 +4,8 @@ import { afterEach } from 'vitest'
 // O padrão de 1 s é pouco para os fluxos com debounce quando a máquina está carregada.
 configure({ asyncUtilTimeout: 5000 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  // A aba de torneio guarda a sessão no navegador; um teste não pode herdar a de outro.
+  window.localStorage.clear()
+})

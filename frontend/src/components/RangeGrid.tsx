@@ -13,6 +13,8 @@ interface RangeGridProps {
   onPaint?: (hand: string) => void
   loading?: boolean
   label?: string
+  /** Situação do spot; contra um raise, 'raise' aparece como 3-bet. */
+  scenario?: string
 }
 
 /** Grid 13x13 do range: cor pela ação, mão do herói destacada, clique seleciona ou pinta. */
@@ -23,6 +25,7 @@ export function RangeGrid({
   onPaint,
   loading = false,
   label = 'Range completo do spot',
+  scenario = 'open',
 }: RangeGridProps) {
   const painting = useRef(false)
   const lastPainted = useRef<string | null>(null)
@@ -73,7 +76,7 @@ export function RangeGrid({
             const frequencies = range?.[hand]
             const selected = hand === selectedHand
             const folds = frequencies !== undefined && (frequencies.fold ?? 0) >= 1
-            const summary = frequencies ? describeFrequencies(frequencies) : 'sem dados'
+            const summary = frequencies ? describeFrequencies(frequencies, scenario) : 'sem dados'
             return (
               <button
                 key={hand}

@@ -1,6 +1,6 @@
 /** Rótulos, cores e formatação das ações (all-in / call / fold). */
 
-import type { ActionName, Frequencies, RangeMap } from '../types.ts'
+import type { ActionName, Frequencies, RangeMap, RangeSource } from '../types.ts'
 import { comboCount } from './hands.ts'
 
 export const ACTION_LABEL: Record<ActionName, string> = {
@@ -26,6 +26,32 @@ export function activeAction(scenario: string): 'allin' | 'call' {
 
 export function scenarioLabel(scenario: string): string {
   return scenario === 'open' ? 'Open' : `vs ${scenario.slice('vs_'.length)}`
+}
+
+/**
+ * Explica a situação. Nas tabelas de push/fold (solver) quem veio antes deu all-in; nas
+ * de stack fundo (referência ou personalizadas) abriu com raise.
+ */
+export function scenarioHelp(scenario: string, source: RangeSource = 'solver'): string {
+  if (scenario === 'open') {
+    return 'Open: todos antes de você foldaram e você é o primeiro a entrar no pote.'
+  }
+  const entered = source === 'solver' ? 'deu all-in' : 'abriu com raise'
+  return `${scenarioLabel(scenario)}: essa posição ${entered} e quem estava entre vocês foldou.`
+}
+
+/** Marca dos stacks nos seletores: de onde vem a tabela daquele stack. */
+export function stackMark(
+  stack: number,
+  table: { reference_stacks: number[]; custom_spots: { stack: number }[] },
+): { mark?: string; markClass?: string } {
+  if (table.custom_spots.some((spot) => spot.stack === stack)) {
+    return { mark: 'tem range personalizado' }
+  }
+  if (table.reference_stacks.includes(stack)) {
+    return { mark: 'tabela de referência', markClass: 'bg-amber-400' }
+  }
+  return {}
 }
 
 /** Combos (de 1326) de cada ação num range, ponderados pela frequência. */
@@ -62,13 +88,14 @@ export function cellBackground(frequencies: Frequencies): string {
 }
 
 /**
- * Mãos que tomam `action`, na notação de range com peso que a API de equity aceita
- * (ex.: 'AA,AKs,K9o:0.4').
+ * Mãos que não foldam, na notação de range com peso que a API de equity aceita
+ * (ex.: 'AA,AKs,K9o:0.4'). Num range de 'open' é com o que a posição entra no pote:
+ * all-in nas tabelas de push/fold, raise nas de stack fundo.
  */
-export function weightedRange(range: RangeMap, action: ActionName): string {
+export function playedRange(range: RangeMap): string {
   return Object.entries(range)
     .flatMap(([hand, frequencies]) => {
-      const weight = frequencies[action] ?? 0
+      const weight = Math.round((1 - (frequencies.fold ?? 0)) * 1000) / 1000
       if (weight <= 0) return []
       return [weight >= 1 ? hand : `${hand}:${weight}`]
     })
@@ -88,9 +115,25 @@ export function formatNumber(value: number): string {
   return numberFormat.format(value)
 }
 
+/** Nome da ação na situação: contra um raise, o raise do herói é um 3-bet. */
+export function actionLabel(action: ActionName, scenario = 'open'): string {
+  return action === 'raise' && scenario !== 'open' ? '3-bet' : ACTION_LABEL[action]
+}
+
 /** 'All-in 40% · Fold 60%'. */
-export function describeFrequencies(frequencies: Frequencies): string {
+export function describeFrequencies(frequencies: Frequencies, scenario = 'open'): string {
   return presentActions(frequencies)
-    .map(([action, frequency]) => `${ACTION_LABEL[action]} ${formatPercent(frequency)}`)
+    .map(([action, frequency]) => `${actionLabel(action, scenario)} ${formatPercent(frequency)}`)
     .join(' · ')
+}
+
+/** Texto grande da recomendação: 'ALL-IN', '3-BET', 'MISTO 40/60'. */
+export function recommendationHeadline(
+  recommendation: ActionName | 'mixed',
+  frequencies: Frequencies,
+  scenario: string,
+): string {
+  if (recommendation !== 'mixed') return actionLabel(recommendation, scenario).toUpperCase()
+  const shares = presentActions(frequencies).map(([, frequency]) => Math.round(frequency * 100))
+  return `MISTO ${shares.join('/')}`
 }

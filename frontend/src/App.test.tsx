@@ -264,6 +264,61 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: /^Assento / })).toHaveLength(2)
   })
 
+  it('com stack fundo mostra raise, tamanho e o selo de referência', async () => {
+    const user = await renderApp()
+    await choose(user, 'Stack (big blinds)', '60 (tabela de referência)')
+    await choose(user, 'Sua posição', 'SB')
+
+    await user.type(screen.getByLabelText('Sua mão'), 'KTo')
+
+    await recommendation('RAISE')
+    expect(screen.getByTestId('bet-size').textContent).toBe('Tamanho sugerido: Raise para 3 bb')
+    expect(screen.getByTestId('range-size').textContent).toBe(
+      'referênciaMãos jogadas: 2,1% · 28 / 1326 combos',
+    )
+    expect(screen.getByTestId('table-notes').textContent).toContain('não por solver')
+    expect(screen.getByRole('gridcell', { name: 'KTo: Raise 100%' })).toBeDefined()
+    expect(api.calls).toContain('/api/lookup?players=8&position=SB&scenario=open&stack=60&hand=KTo')
+  })
+
+  it('contra um raise com stack fundo fala em 3-bet e call', async () => {
+    const user = await renderApp()
+    await choose(user, 'Stack (big blinds)', '60 (tabela de referência)')
+    await choose(user, 'Sua posição', 'BB')
+    await choose(user, 'Situação', 'vs CO')
+
+    await user.type(screen.getByLabelText('Sua mão'), 'AA')
+
+    await recommendation('3-BET')
+    expect(screen.getByTestId('bet-size').textContent).toBe('Tamanho sugerido: 3-bet para 6,6 bb')
+    expect(screen.getByRole('gridcell', { name: 'QQ: Call 100%' })).toBeDefined()
+    expect(screen.getByText(/essa posição abriu com raise/)).toBeDefined()
+
+    // A equity passa a ser contra o range de abertura (raise) do CO.
+    const panel = within(await screen.findByRole('region', { name: 'Equity contra o raise do CO' }))
+    expect(await panel.findByText(/AA contra o range de abertura do CO/)).toBeDefined()
+    expect(api.equityRequests.at(-1)).toMatchObject({ hero: 'AA', villain_range: 'AA,AKs,KK,KTo' })
+  })
+
+  it('avisa quando não há tabela para o stack informado', async () => {
+    const user = await renderApp()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Informar em fichas' }))
+    await user.type(screen.getByRole('textbox', { name: 'Fichas' }), '250000')
+    await user.type(screen.getByRole('textbox', { name: 'Big blind' }), '1000')
+
+    const notes = await screen.findByTestId('table-notes')
+    expect(notes.textContent).toContain('Não há tabela para 250 bb: a mais próxima é a de 100 bb.')
+  })
+
+  it('não mostra avisos nas tabelas de push/fold dentro da faixa', async () => {
+    await renderApp()
+
+    await screen.findByRole('gridcell', { name: 'AA: All-in 100%' })
+    expect(screen.queryByTestId('table-notes')).toBeNull()
+    expect(screen.queryByTestId('bet-size')).toBeNull()
+  })
+
   it('avisa quando a API está fora do ar e permite tentar de novo', async () => {
     api.setOffline(true)
     render(<App />)

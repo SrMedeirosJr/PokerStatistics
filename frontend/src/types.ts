@@ -9,6 +9,12 @@ export type RangeMap = Record<string, Frequencies>
 
 export type Recommendation = ActionName | 'mixed'
 
+/**
+ * De onde vem um range: 'solver' (push/fold calculado), 'reference' (heurística de stack
+ * fundo) ou 'custom' (salvo pelo usuário).
+ */
+export type RangeSource = 'solver' | 'reference' | 'custom'
+
 /** Spot com range personalizado salvo, para marcar nos seletores. */
 export interface CustomSpotInfo {
   id: number
@@ -20,8 +26,10 @@ export interface CustomSpotInfo {
 
 export interface TableInfo {
   players: number
-  /** Stacks com ranges do solver e/ou personalizados. */
+  /** Stacks com ranges do solver, de referência e/ou personalizados. */
   stacks: number[]
+  /** Os que vêm das tabelas de referência (heurística de stack fundo). */
+  reference_stacks: number[]
   positions: string[]
   /** Cenários válidos por posição: 'open' e/ou 'vs_{POS}'. */
   scenarios: Record<string, string[]>
@@ -42,10 +50,11 @@ export interface RangeResponse {
   range_pct: number
   combos: number
   range: RangeMap
-  /** 'solver' para ranges gerados; 'custom' para os que o usuário salvou. */
-  source: 'solver' | 'custom'
+  source: RangeSource
   custom_id: number | null
   name: string | null
+  /** Tamanho sugerido de cada aposta, em bb (só nas tabelas de referência). */
+  sizes: Partial<Record<ActionName, number>>
 }
 
 /** Range personalizado como enviado para a API; mãos ausentes em `actions` são fold. */

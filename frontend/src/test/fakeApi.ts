@@ -6,6 +6,7 @@ import { comboCount, HAND_GRID } from '../lib/hands.ts'
 import type { CustomRange, CustomRangeInput, Frequencies, RangeMap, TableInfo } from '../types.ts'
 
 const STACKS = [3, 4, 5, 6, 7, 8, 10, 12, 15, 20]
+const REFERENCE_STACKS = [25, 40, 60, 100]
 const HANDS = HAND_GRID.flat()
 const PAIRS = ['AA', 'KK', 'QQ', 'JJ', 'TT', '99', '88', '77', '66', '55', '44', '33', '22']
 
@@ -30,6 +31,24 @@ function solverRange(scenario: string): RangeMap {
         return [hand, { call, fold: 1 - call }]
       }
       return [hand, CALL_HANDS.includes(hand) ? { call: 1 } : { fold: 1 }]
+    }),
+  )
+}
+
+/**
+ * Tabela de referência falsa (stack fundo): em 'open' abre com raise; contra um raise,
+ * 3-bet com AA/KK e call com QQ/AKs.
+ */
+const REFERENCE_OPEN = ['AA', 'KK', 'AKs', 'KTo']
+
+function referenceRange(scenario: string): RangeMap {
+  return Object.fromEntries(
+    HANDS.map((hand): [string, Frequencies] => {
+      if (scenario === 'open') {
+        return [hand, REFERENCE_OPEN.includes(hand) ? { raise: 1 } : { fold: 1 }]
+      }
+      if (['AA', 'KK'].includes(hand)) return [hand, { raise: 1 }]
+      return [hand, ['QQ', 'AKs'].includes(hand) ? { call: 1 } : { fold: 1 }]
     }),
   )
 }
@@ -105,7 +124,10 @@ export function installFakeApi(): FakeApi {
       )
       return {
         players,
-        stacks: [...new Set([...STACKS, ...custom.map((item) => item.stack_bb)])].sort((a, b) => a - b),
+        stacks: [
+          ...new Set([...STACKS, ...REFERENCE_STACKS, ...custom.map((item) => item.stack_bb)]),
+        ].sort((a, b) => a - b),
+        reference_stacks: REFERENCE_STACKS,
         positions,
         scenarios,
         custom_spots: custom.map((item) => ({
@@ -161,11 +183,23 @@ export function installFakeApi(): FakeApi {
     const custom = customRanges.filter(
       (item) => item.players === players && item.position === position && item.scenario === scenario,
     )
-    const used = nearest([...STACKS, ...custom.map((item) => item.stack_bb)], requested)
+    const used = nearest(
+      [...STACKS, ...REFERENCE_STACKS, ...custom.map((item) => item.stack_bb)],
+      requested,
+    )
     const match = custom.find((item) => item.stack_bb === used)
-    const range = match ? match.actions : solverRange(scenario)
+    const reference = !match && REFERENCE_STACKS.includes(used)
+    const range = match
+      ? match.actions
+      : reference
+        ? referenceRange(scenario)
+        : solverRange(scenario)
+    const sizes = reference
+      ? { raise: scenario === 'open' ? (position === 'SB' ? 3 : 2.2) : 6.6 }
+      : {}
+    const prefix = reference ? 'ref' : 'mtt'
     return {
-      spot_id: match ? match.spot_id : `mtt_${players}max_${used}bb_${position}_${scenario}`,
+      spot_id: match ? match.spot_id : `${prefix}_${players}max_${used}bb_${position}_${scenario}`,
       players,
       position,
       scenario,
@@ -173,9 +207,10 @@ export function installFakeApi(): FakeApi {
       stack_used: used,
       ...sizeFields(range),
       range,
-      source: match ? 'custom' : 'solver',
+      source: match ? 'custom' : reference ? 'reference' : 'solver',
       custom_id: match ? match.id : null,
       name: match ? match.name : null,
+      sizes,
     }
   }
 
