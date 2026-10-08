@@ -77,6 +77,7 @@ export interface EquityRequest {
   villain_range: string
   board?: string[]
   iterations?: number
+  seed?: number
 }
 
 export function postEquity(body: EquityRequest, signal?: AbortSignal): Promise<EquityResponse> {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
 
 import { ActionResult } from './components/ActionResult.tsx'
+import { EquityPanel } from './components/EquityPanel.tsx'
 import { HandInput } from './components/HandInput.tsx'
 import { Legend } from './components/Legend.tsx'
 import { RangeGrid } from './components/RangeGrid.tsx'
@@ -83,7 +84,8 @@ export default function App() {
   const parsed = useMemo(() => parseHand(state.handText), [state.handText])
   const handClass = parsed.status === 'valid' ? parsed.handClass : null
   const table = currentTable(state)
-  const { range, lookup, loading, error } = useSpotData(buildQuery(state), handClass)
+  const query = buildQuery(state)
+  const { range, lookup, loading, error } = useSpotData(query, handClass)
 
   function retry() {
     setApiStatus('checking')
@@ -153,6 +155,7 @@ export default function App() {
                 error={error}
               />
               {range && !error && <StackWarning spot={range} maxStack={Math.max(...table.stacks)} />}
+              <EquityPanel query={query} hand={parsed} />
               <section className={`${panel} space-y-3`} aria-label="Range">
                 <RangeGrid
                   range={error ? null : (range?.range ?? null)}

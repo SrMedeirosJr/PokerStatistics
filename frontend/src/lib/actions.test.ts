@@ -8,6 +8,7 @@ import {
   formatNumber,
   formatPercent,
   scenarioLabel,
+  weightedRange,
 } from './actions.ts'
 
 describe('ações', () => {
@@ -28,6 +29,19 @@ describe('ações', () => {
     expect(cellBackground({ call: 0.4, fold: 0.6 })).toBe(
       `linear-gradient(90deg, ${ACTION_COLOR.call} 0.0% 40.0%, ${ACTION_COLOR.fold} 40.0% 100.0%)`,
     )
+  })
+
+  it('monta o range com pesos para a API de equity', () => {
+    const range = {
+      AA: { allin: 1 },
+      AKs: { allin: 0.4, fold: 0.6 },
+      K9o: { fold: 1 },
+      '72o': { call: 1 },
+    }
+
+    expect(weightedRange(range, 'allin')).toBe('AA,AKs:0.4')
+    expect(weightedRange(range, 'call')).toBe('72o')
+    expect(weightedRange({ K9o: { fold: 1 } }, 'allin')).toBe('')
   })
 
   it('formata frequências e números em português', () => {

@@ -4,6 +4,7 @@ import { formatNumber, scenarioLabel } from '../lib/actions.ts'
 import { chipsStack, type SpotAction, type SpotState } from '../lib/spotState.ts'
 import type { TableInfo } from '../types.ts'
 import { ChoiceGroup } from './ChoiceGroup.tsx'
+import { PositionHelper } from './PositionHelper.tsx'
 
 interface SpotSelectorProps {
   state: SpotState
@@ -81,6 +82,11 @@ export function SpotSelector({ state, table, dispatch }: SpotSelectorProps) {
         options={table.positions.map((position) => ({ value: position, label: position }))}
         value={state.position}
         onChange={(position) => dispatch({ type: 'setPosition', position })}
+      />
+      <PositionHelper
+        positions={table.positions}
+        selected={state.position}
+        onSelect={(position) => dispatch({ type: 'setPosition', position })}
       />
 
       <ChoiceGroup

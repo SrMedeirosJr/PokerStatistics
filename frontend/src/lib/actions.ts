@@ -1,6 +1,6 @@
 /** Rótulos, cores e formatação das ações (all-in / call / fold). */
 
-import type { ActionName, Frequencies } from '../types.ts'
+import type { ActionName, Frequencies, RangeMap } from '../types.ts'
 
 export const ACTION_LABEL: Record<ActionName, string> = {
   allin: 'All-in',
@@ -45,6 +45,20 @@ export function cellBackground(frequencies: Frequencies): string {
     start = end
   }
   return `linear-gradient(90deg, ${stops.join(', ')})`
+}
+
+/**
+ * Mãos que tomam `action`, na notação de range com peso que a API de equity aceita
+ * (ex.: 'AA,AKs,K9o:0.4').
+ */
+export function weightedRange(range: RangeMap, action: ActionName): string {
+  return Object.entries(range)
+    .flatMap(([hand, frequencies]) => {
+      const weight = frequencies[action] ?? 0
+      if (weight <= 0) return []
+      return [weight >= 1 ? hand : `${hand}:${weight}`]
+    })
+    .join(',')
 }
 
 const percentFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 })

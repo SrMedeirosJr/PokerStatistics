@@ -386,3 +386,11 @@ _(O Claude registra aqui decisões tomadas durante a implementação.)_
 - Os campos "fichas" e "big blind" aceitam o formato brasileiro (`12.500`, `1,5`).
 - O tooltip do grid é o `title` nativo do navegador; no celular, tocar na célula seleciona a mão e o card mostra as frequências.
 - A tela avisa quando o stack usado é menor que 5 bb (saturação do modelo) e quando o stack informado passa de 25 bb (push/fold deixa de ser a estratégia adequada).
+
+### Fase 6 — Equity e ajudas
+
+- O `EquityPanel` busca em `/api/ranges` o range de `open` da posição que deu all-in (mesma mesa e mesmo stack) e manda para `/api/equity` como range com pesos, então mãos mistas do pusher entram com a frequência certa.
+- A chamada usa 20.000 simulações e **semente fixa**, para o mesmo spot e a mesma mão mostrarem sempre o mesmo número. Conferido no navegador: A9o no BB contra o all-in do CO (8 jogadores, 10 bb) mostra 52,9%, e a API chamada direto com 100.000 simulações dá 52,6%.
+- Se a mão foi informada com naipes (`Ah9d`), a equity é calculada para essas cartas exatas; se foi uma classe (`A9o`), é a média dos combos.
+- Um erro no cálculo da equity aparece dentro do painel e não esconde a recomendação.
+- O `PositionHelper` fica recolhido por padrão e os assentos da mini-mesa são clicáveis (escolhem a posição).

@@ -18,6 +18,7 @@ function table(players: number, positions: string[]): TableInfo {
 }
 
 export const TABLES: TableInfo[] = [
+  table(2, ['SB', 'BB']),
   table(6, ['LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB']),
   table(8, ['UTG', 'UTG1', 'LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB']),
 ]
@@ -78,6 +79,8 @@ function spotResponse(params: URLSearchParams): Record<string, unknown> {
 export interface FakeApi {
   /** Caminho + query de cada chamada feita, na ordem. */
   calls: string[]
+  /** Corpo (JSON) de cada POST em /api/equity, na ordem. */
+  equityRequests: Record<string, unknown>[]
   /** A próxima chamada cujo caminho comece com `path` responde este erro. */
   failNext: (path: string, status: number, detail: string) => void
   /** Simula o backend fora do ar (fetch rejeita) enquanto estiver ligado. */
@@ -86,13 +89,17 @@ export interface FakeApi {
 
 export function installFakeApi(): FakeApi {
   const calls: string[] = []
+  const equityRequests: Record<string, unknown>[] = []
   const failures: { path: string; status: number; detail: string }[] = []
   let offline = false
 
-  const fetchMock = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input), 'http://localhost')
     calls.push(url.pathname + url.search)
     if (offline) throw new TypeError('Failed to fetch')
+    if (url.pathname === '/api/equity' && typeof init?.body === 'string') {
+      equityRequests.push(JSON.parse(init.body) as Record<string, unknown>)
+    }
 
     const failure = failures.findIndex((item) => url.pathname.startsWith(item.path))
     if (failure >= 0) {
@@ -129,6 +136,7 @@ export function installFakeApi(): FakeApi {
 
   return {
     calls,
+    equityRequests,
     failNext: (path, status, detail) => failures.push({ path, status, detail }),
     setOffline: (value) => {
       offline = value

@@ -183,6 +183,87 @@ describe('App', () => {
     expect(alert.textContent).toContain('Cenário impossível: BTN não age antes de CO.')
   })
 
+  it('calcula a equity contra o range de all-in de quem empurrou', async () => {
+    const user = await renderApp()
+    await choose(user, 'Sua posição', 'BB')
+    await choose(user, 'Stack (big blinds)', '6')
+    await choose(user, 'Situação', 'vs CO')
+
+    await user.type(screen.getByLabelText('Sua mão'), 'A9o')
+
+    const panel = within(await screen.findByRole('region', { name: 'Equity contra o all-in do CO' }))
+    await waitFor(() => expect(panel.getByTestId('equity').textContent).toBe('48%'))
+    expect(panel.getByTestId('equity-win').textContent).toBe('47%')
+    expect(panel.getByTestId('equity-tie').textContent).toBe('2%')
+    expect(panel.getByTestId('equity-lose').textContent).toBe('51%')
+    expect(panel.getByText(/A9o contra o range de all-in do CO/)).toBeDefined()
+
+    // O range usado é o de 'open' do CO, no mesmo stack e na mesma mesa.
+    expect(api.calls).toContain('/api/ranges?players=8&position=CO&scenario=open&stack=6')
+    expect(api.equityRequests.at(-1)).toMatchObject({
+      hero: 'A9o',
+      villain_range: 'AA,AKs,KK,K9o',
+      iterations: 20000,
+    })
+  })
+
+  it('manda as cartas exatas para a equity quando a mão tem naipes', async () => {
+    const user = await renderApp()
+    await choose(user, 'Sua posição', 'BB')
+
+    await user.type(screen.getByLabelText('Sua mão'), 'Ah9d')
+
+    const panel = within(await screen.findByRole('region', { name: 'Equity contra o all-in do SB' }))
+    expect(await panel.findByText(/A♥9♦ contra o range de all-in do SB/)).toBeDefined()
+    expect(api.equityRequests.at(-1)).toMatchObject({ hero: 'Ah9d' })
+  })
+
+  it('só mostra o painel de equity contra um all-in', async () => {
+    const user = await renderApp()
+    await user.type(screen.getByLabelText('Sua mão'), 'K9o')
+    await recommendation('ALL-IN')
+    expect(screen.queryByRole('region', { name: /Equity contra/ })).toBeNull()
+
+    await user.clear(screen.getByLabelText('Sua mão'))
+    await choose(user, 'Sua posição', 'BB')
+
+    const panel = within(screen.getByRole('region', { name: 'Equity contra o all-in do SB' }))
+    expect(panel.getByText(/Informe sua mão para ver quanto ela ganha/)).toBeDefined()
+    expect(api.equityRequests).toHaveLength(0)
+  })
+
+  it('mostra em português o erro do cálculo de equity', async () => {
+    const user = await renderApp()
+    await choose(user, 'Sua posição', 'BB')
+    api.failNext('/api/equity', 422, 'O range do adversário não tem nenhum combo compatível.')
+
+    await user.type(screen.getByLabelText('Sua mão'), 'A9o')
+
+    const panel = within(await screen.findByRole('region', { name: 'Equity contra o all-in do SB' }))
+    const alert = await panel.findByRole('alert')
+    expect(alert.textContent).toBe(
+      'Não foi possível calcular a equity: O range do adversário não tem nenhum combo compatível.',
+    )
+    // O erro da equity não derruba a recomendação.
+    await recommendation('MISTO 40/60')
+  })
+
+  it('explica as posições e deixa escolher pelo assento na mini-mesa', async () => {
+    const user = await renderApp()
+
+    await user.click(screen.getByText('Como descobrir minha posição?'))
+    expect(screen.getByText(/Cadeira vazia não conta/)).toBeDefined()
+    expect(screen.getByText(/UTG → UTG1 → LJ → HJ → CO → BTN → SB → BB/)).toBeDefined()
+    await user.click(screen.getByRole('button', { name: 'Assento BTN' }))
+
+    expect(selectedOption('Sua posição')).toBe('BTN')
+    expect(screen.getByRole('button', { name: 'Assento BTN' }).getAttribute('aria-pressed')).toBe('true')
+
+    await choose(user, 'Jogadores na mesa', '2')
+    expect(screen.getByText(/No heads-up quem está no botão é o SB/)).toBeDefined()
+    expect(screen.getAllByRole('button', { name: /^Assento / })).toHaveLength(2)
+  })
+
   it('avisa quando a API está fora do ar e permite tentar de novo', async () => {
     api.setOffline(true)
     render(<App />)
