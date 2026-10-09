@@ -185,3 +185,25 @@ describe('aba de torneio', () => {
     expect(position()).toBe('BTN')
   })
 })
+
+describe('dica de call e 3-bet', () => {
+  it('lembra de escolher "vs" quando alguém pode ter entrado antes', async () => {
+    const user = await openTournament()
+
+    await user.click(group('Sua posição nesta mão').getByRole('radio', { name: 'CO' }))
+    expect(screen.getByTestId('facing-hint').textContent).toContain('Escolha "vs"')
+
+    // Depois de escolher o "vs" a dica some: as opções já são call e 3-bet.
+    await user.click(group('Situação').getByRole('radio', { name: 'vs UTG' }))
+    expect(screen.queryByTestId('facing-hint')).toBeNull()
+  })
+
+  it('não mostra a dica no UTG, onde ninguém age antes', async () => {
+    const user = await openTournament()
+
+    await user.click(group('Sua posição nesta mão').getByRole('radio', { name: 'UTG' }))
+
+    expect(screen.queryByTestId('facing-hint')).toBeNull()
+    expect(group('Situação').getAllByRole('radio')).toHaveLength(1)
+  })
+})

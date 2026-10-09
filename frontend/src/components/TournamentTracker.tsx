@@ -71,6 +71,9 @@ export function TournamentTracker({ tables, version }: TournamentTrackerProps) {
   if (!table) return null
   const untilBigBlind = handsUntil(table.positions, state.position, 'BB')
   const untilSmallBlind = handsUntil(table.positions, state.position, 'SB')
+  const facingOptions = (table.scenarios[state.position] ?? []).filter(
+    (scenario) => scenario !== 'open',
+  ).length
 
   function nextHand() {
     const record =
@@ -178,6 +181,12 @@ export function TournamentTracker({ tables, version }: TournamentTrackerProps) {
             <p className="mt-1.5 text-xs text-slate-500">
               {scenarioHelp(state.scenario, data.range?.source)}
             </p>
+            {state.scenario === 'open' && facingOptions > 0 && (
+              <p className="mt-1 text-xs text-amber-200/80" data-testid="facing-hint">
+                Alguém entrou no pote antes de você? Escolha "vs" e a posição dele para ver call
+                e 3-bet. Em Open só existe raise ou fold.
+              </p>
+            )}
           </div>
         </section>
 

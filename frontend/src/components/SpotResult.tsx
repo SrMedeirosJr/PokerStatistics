@@ -38,6 +38,7 @@ function TableNotes({ spot }: { spot: RangeResponse }) {
   if (spot.source === 'reference') {
     notes.push(
       'Tabela de referência: montada por heurística (força da mão e jogabilidade), não por solver. ' +
+        'As mãos com 25%, 50% ou 75% são as que ficam no limite do range. ' +
         'Não cobre limp nem a resposta a um 3-bet. Use como ponto de partida e ajuste em "Meus ranges".',
     )
   }

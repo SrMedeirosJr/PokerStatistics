@@ -26,6 +26,7 @@ from app.reference.model import (
     equity_against,
     open_size,
     playability_bonus,
+    soft_top,
     three_bet_size,
     top_fraction,
 )
@@ -72,6 +73,37 @@ def test_top_fraction_hits_the_target_and_respects_the_filter(equity_matrix: Equ
     assert coverage(top_fraction(scores, 0.0)) == 0
     suited = np.array([name.endswith("s") for name in HAND_CLASSES])
     assert all(name.endswith("s") for name in hands(top_fraction(scores, 0.05, allowed=suited)))
+
+
+def test_soft_top_mixes_only_the_hands_around_the_cutoff(equity_matrix: EquityMatrix) -> None:
+    scores = equity_against(equity_matrix, np.ones(169))
+    selected = soft_top(scores, 0.20)
+
+    # O total continua no alvo e as frequências andam em passos de 25%.
+    assert coverage(selected) == pytest.approx(0.20, abs=0.006)
+    assert set(np.unique(selected)) == {0.0, 0.25, 0.5, 0.75, 1.0}
+    # Da mão mais forte para a mais fraca a frequência nunca sobe.
+    ordered = selected[np.argsort(-scores, kind="stable")]
+    assert (np.diff(ordered) <= 0).all()
+    # Só as mãos perto do corte ficam mistas: o topo é puro e o resto é fold.
+    mixed = (selected > 0) & (selected < 1)
+    assert 3 <= mixed.sum() <= 15
+    assert coverage(mixed.astype(float)) < 0.06
+    assert selected[INDEX["AA"]] == 1
+    assert selected[INDEX["72o"]] == 0
+
+    assert coverage(soft_top(scores, 0.0)) == 0
+    suited = np.array([name.endswith("s") for name in HAND_CLASSES])
+    assert all(name.endswith("s") for name in hands(soft_top(scores, 0.05, allowed=suited)))
+
+
+def test_small_ranges_have_a_narrow_mixed_band(equity_matrix: EquityMatrix) -> None:
+    scores = equity_against(equity_matrix, np.ones(169))
+    selected = soft_top(scores, 0.02)
+
+    # Com 2% de alvo a faixa é de no máximo 0,5 ponto para cada lado: AA e KK ficam puros.
+    assert selected[INDEX["AA"]] == selected[INDEX["KK"]] == 1
+    assert coverage(selected) == pytest.approx(0.02, abs=0.004)
 
 
 def test_open_ranges_follow_the_target_widths(
@@ -126,8 +158,27 @@ def test_responses_are_consistent(tables: dict[tuple[int, float], ReferenceTable
             three_bet = "allin" if shove else "raise"
             assert set(spot.actions) == {three_bet, "call"}, (players, stack, key)
             total = spot.actions[three_bet] + spot.actions["call"]
-            assert set(np.unique(total)) <= {0.0, 1.0}, (players, stack, key)
+            assert total.max() <= 1, (players, stack, key)
+            for frequencies in spot.actions.values():
+                assert set(np.unique(frequencies)) <= {0.0, 0.25, 0.5, 0.75, 1.0}, (stack, key)
             assert (set(spot.sizes) == set()) if shove else (set(spot.sizes) == {"raise"})
+
+
+def test_borderline_hands_get_partial_frequencies(
+    tables: dict[tuple[int, float], ReferenceTable],
+) -> None:
+    table = tables[(8, 40.0)]
+
+    opening = table.spots["UTG_open"].actions["raise"]
+    mixed = {name for name, value in zip(HAND_CLASSES, opening, strict=True) if 0 < value < 1}
+    assert 3 <= len(mixed) <= 15
+    assert not {"AA", "KK", "QQ", "AKs", "AKo", "AQs"} & mixed
+
+    # Na fronteira entre 3-bet e call a mesma mão faz as duas coisas.
+    response = table.spots["BTN_vs_CO"]
+    both = (response.actions["raise"] > 0) & (response.actions["call"] > 0)
+    assert both.any()
+    assert (response.actions["raise"] + response.actions["call"])[both].max() <= 1
 
 
 def test_big_blind_defends_wider_than_the_other_seats(
@@ -144,7 +195,7 @@ def test_big_blind_defends_wider_than_the_other_seats(
 
         assert defended("BB", "CO") > defended("BTN", "CO") > defended("SB", "CO") * 0.8
         assert defended("BB", "BTN") > defended("BB", "UTG")
-        assert defended("BB", "SB") <= 0.80 + 0.006
+        assert defended("BB", "SB") <= 0.80 + 0.012
 
 
 def test_continue_fractions_by_seat_and_depth() -> None:
@@ -209,7 +260,7 @@ def test_document_format(equity_matrix: EquityMatrix) -> None:
         "format": "ref",
         "players": 3,
         "stack_bb": 25,
-        "model": "reference-heuristic-v1",
+        "model": MODEL,
         "generated_at": "2026-10-08T20:00:00Z",
     }
     assert set(document["spots"]) == {"BTN_open", "SB_open", "SB_vs_BTN", "BB_vs_BTN", "BB_vs_SB"}
@@ -300,3 +351,19 @@ def test_solver_ranges_have_no_sizes(client: TestClient) -> None:
 
     assert (body["source"], body["sizes"]) == ("solver", {})
     assert body["recommendation"] == "allin"
+
+
+def test_lookup_reports_borderline_hands_as_mixed(client: TestClient) -> None:
+    spot = {"players": 8, "stack": 40, "position": "UTG", "scenario": "open"}
+    table = client.get("/api/ranges", params=spot).json()
+    mixed = [name for name, frequencies in table["range"].items() if len(frequencies) == 2]
+    assert mixed, "esperava mãos com frequência parcial na tabela de referência"
+
+    for hand in mixed:
+        body = lookup(client, **spot, hand=hand)
+        assert set(body["frequencies"]) == {"raise", "fold"}
+        assert sum(body["frequencies"].values()) == pytest.approx(1.0)
+        # Abaixo de 80% numa ação a recomendação é "mixed".
+        expected = "mixed" if max(body["frequencies"].values()) < 0.8 else None
+        assert expected is None or body["recommendation"] == expected
+    assert any(lookup(client, **spot, hand=hand)["recommendation"] == "mixed" for hand in mixed)
